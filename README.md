@@ -71,7 +71,7 @@ Internally CPPServer is an EPOLL event-based async server, with one thread CPPSe
 ## Resources:
 
 * [Overview](https://cppserver.com)
-* [QuickStart in 10 minutes with Kubernetes](https://www.linkedin.com/pulse/quickstart-con-cppserver-y-kubernetes-mart%C3%ADn-c%C3%B3rdova/)
+* [QuickStart in 10 minutes with Kubernetes](https://github.com/cppservergit/cppserver-docs/blob/main/quickstart.md)
 * [Anatomy of a C++ microservice](https://cppserver.com/docs/microservice-anatomy.pdf)
 * [DockerHub repository](https://hub.docker.com/r/cppserver/pgsql)
 
