@@ -4,11 +4,11 @@
 
 In a few minutes, using your Windows 10 Pro PC or Laptop, you can install and test our free C++ microservices engine, CPPServer, which runs on Kubernetes, On-Premise, or Cloud, it's portable and vendor-independent, we like to use Canonical MicroK8s (Ubuntu), a very popular and stable Kubernetes distro, easy to use, scales from single-node to high-availability with 3+ nodes, suitable for development and production.
 
-We recommend using Multipass in order to provision VMs on Win10, it's very easy and fast, like having the cloud on your local machine.
+We recommend using Multipass in order to provision VMs on Win10 Pro, it's very easy and fast, like having the cloud on your local machine.
 
 [Download Multipass for Windows 10 Pro](https://multipass.run/download/windows)
 
-This is a step-by-step procedure, if you find any problem, please contact us and take note of the step in question: cppserver@martincordova.com
+If you find any problem following this procedure you may create an Issue on this repository to be promptly assisted or contact us via email: cppserver@martincordova.com
 
 We will create 2 Ubuntu Server 22.04 VMs, one for the database, PostgreSQL 15 running on Docker, and the other for the Kubernetes cluster with MicroK8s. Assuming that you have installed Multipass on your computer and that you have 16GB RAM and about 60GB of free disk space. Let's do it!
 
