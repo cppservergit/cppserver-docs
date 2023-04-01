@@ -1,6 +1,6 @@
 # CPPServer documentation repository
 
-## Quick Intro
+## Overview
 
 CPPServer is a high-performance declarative microservices engine for PostgreSQL/SQLServer written in C++, compiled to optimized machine code, for Kubernetes and Cloud serverless services like Azure Container Apps. A single container can serve thousands of microservices in a secure way. Incorporates built-in observability features like JSON stderr logs, direct push to Loki, Prometheus end-point for metrics and tracing.
 
