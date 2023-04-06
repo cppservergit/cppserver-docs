@@ -261,7 +261,7 @@ cppserver-96476d8d5-llpxk   1/1     Running     0          90s
 cppjob-27998802-7l9jd       0/1     Completed   0          25s
 ```
 
-Wait and repeat until the pods are in Running or Completed status.
+Wait (about 40 seconds) and repeat until the pods are in Running or Completed status.
 
 Let's print Pod's logs, take note of your CPPServer Pod's name, it will be different from the example shown above:
 
