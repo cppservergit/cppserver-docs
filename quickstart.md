@@ -93,7 +93,7 @@ Test installation status by checking the system Pods (containers):
 sudo microk8s kubectl get pods -A
 ```
 
-Wait and repeat until their status is Running or Completed, six Pods:
+Wait (about 3 minutes) and repeat until their status is Running or Completed, six Pods:
 ```
 NAMESPACE     NAME                                       READY   STATUS      RESTARTS   AG
 kube-system   coredns-6f5f9b5d74-f5qtj                   1/1     Running     0          3h23m
