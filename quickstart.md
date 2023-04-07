@@ -12,7 +12,6 @@ If you find any problem following this procedure you may create an Issue on this
 
 We will create 2 Ubuntu Server 22.04 VMs, one for the database, PostgreSQL 15 running on Docker, and the other for the Kubernetes cluster with MicroK8s. Assuming that you have installed Multipass on your computer and that you have 16GB RAM and about 60GB of free disk space. Let's do it!
 
-![Quickstart Kubernetes cluster with MicroK8s](https://cppserver.com/quickstart-cluster.png)
 
 Disclaimer: no warranties and no responsibilities assumed by the author, use at your own risk.
 
