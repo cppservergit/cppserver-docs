@@ -22,8 +22,8 @@ Open a command prompt on Win10 and run:
 ```
 multipass launch docker --name demodb
 ```
-
-Wait a few minutes and the VM will be ready, launch its Linux terminal:
+This command will create an Ubuntu 22.04 VM with Docker pre-installed.
+Wait a few minutes (3-5) and the VM will be ready, launch its Linux terminal:
 
 ```
 multipass shell demodb
