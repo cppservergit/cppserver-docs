@@ -195,7 +195,7 @@ Expected output:
 configmap/cppserver-config created
 ```
 
-Let's download the Demo website, to be served by CPPServer, and also create www and blobs directories inside your $HOME directory, CPPServer will use Kubernetes volumes mapped to the Host using these directories, which is OK for development on single-node clusters, but not suitable for production when using many nodes (VMs) for the cluster, in that case, we would use volumes shared by all nodes using shared storage, like NFS or a cluster-native solution.
+Let's download the Demo website, to be served by CPPServer, and also create www and blobs directories inside your $HOME directory, CPPServer will use Kubernetes volumes mapped to the Host filesystem using these directories, which is OK for development on single-node clusters, but not suitable for production when using many nodes (VMs) for the cluster, in that case, we would use volumes shared by all nodes using shared storage, like NFS or a cluster-native solution.
 
 ```
 mkdir $HOME/blobs -p && mkdir $HOME/www -p && curl https://cppserver.com/files/demo-k8s.tgz -Os && tar xzf demo-k8s.tgz -C $HOME/www && rm demo-k8s.tgz
