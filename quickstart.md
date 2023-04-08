@@ -207,24 +207,23 @@ www
 └── demo
     ├── categ.html
     ├── css
-    │   ├── frontend.css
-    │   ├── highcharts.css
-    │   ├── pico.css
-    │   └── pico.css.map
+    │   ├── frontend.css
+    │   ├── highcharts.css
+    │   ├── pico.css
+    │   └── pico.css.map
     ├── customer.html
     ├── gasto.html
     ├── images
-    │   └── apple-icon.png
+    │   └── apple-icon.png
     ├── index.html
     ├── js
-    │   ├── common.js
-    │   ├── frontend.js
-    │   ├── highcharts-3d.js
-    │   ├── highcharts-3d.js.map
-    │   ├── highcharts.js
-    │   ├── highcharts.js.map
-    │   ├── index.js
-    │   └── locale.js
+    │   ├── common.js
+    │   ├── frontend.js
+    │   ├── highcharts-3d.js
+    │   ├── highcharts-3d.js.map
+    │   ├── highcharts.js
+    │   ├── highcharts.js.map
+    │   └── locale.js
     ├── menu.html
     ├── products.html
     ├── sales.html
@@ -429,7 +428,7 @@ This web development model was built from the start to be easily converted into 
 
 There are 10.000 users available (user1...user10000), these are used by a stress test client application we use to test CPPServer reliability, more on this later if you are interested in running these tests, contact us! 
 
-Congrats! you just finished the first part of this tutorial, what comes next? a series of typical development tasks, like adding your own microservices to config.json and refreshing the Cluster to read your changes, and more, if you are interested in part 2 please let us know, it's free!
+Congrats! you just finished the first part of this tutorial, what comes next? a series of typical development tasks, like adding your own microservices to config.json, refreshing the cluster to read your changes, and more, if you are interested in part 2 please let us know, it's free!
 
 Contact us: cppserver@martincordova.com
 
