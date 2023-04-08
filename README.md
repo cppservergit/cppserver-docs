@@ -76,6 +76,7 @@ CPPServer is vendor-agnostic, it was designed and built to run from Laptops to O
 ## Resources:
 
 * [Quickstart tutorial in 10 minutes with Kubernetes](https://github.com/cppservergit/cppserver-docs/blob/main/quickstart.md)
+* [Automatic Kubernetes-native security check with Trivy and MicroK8s](https://github.com/cppservergit/cppserver-docs/blob/main/security-check.md)
 * [Official website](https://cppserver.com)
 * [Anatomy of a C++ microservice](https://github.com/cppservergit/cppserver-docs/blob/main/microservice-anatomy.pdf)
 * [DockerHub repository](https://hub.docker.com/r/cppserver/pgsql)
