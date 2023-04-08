@@ -410,5 +410,5 @@ cat $HOME/cppserver.yaml
 
 We can do more about security, like adding a Network Policy to block direct access to the CPPServer service, so that only the Ingress can access it. We don't have it by default in the QuickStart deployment, and Trivy is not checking its existence, there is an article on this repository focused on completing that Network Policy task.
 
-There are other security scanners for Kubernetes, like [Kube-Scape](https://github.com/kubescape/kubescape), this one will complain about the lack of SecurityPolicy on the CPPServer domain, which is a good thing, because having one helps restricting access to the Pods, on the other hand, Kube-Scape will trigger more less-relevant alerts.
+There are other security scanners for Kubernetes, like [Kube-Scape](https://github.com/kubescape/kubescape), this one will complain about the lack of NetworkPolicy on the CPPServer domain, which is a good thing, because having one helps restricting access to the Pods, on the other hand, Kube-Scape will trigger more less-relevant alerts than Trivy Operator.
 
