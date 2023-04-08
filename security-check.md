@@ -1,6 +1,6 @@
 # Automatic Kubernetes-native security check using Trivy and MicroK8s
 
-In this tutorial you will use the convenient Trivy Kubernetes Operator created by the security experts Aqua Security Software Ltd, to execute an automatic scan of your cluster (the one created with the QuickStart tutorial) searching for vulnerabilities and producing detailed reports, all of these tasks will be executed via kubectl, like any other administrative task.
+In this tutorial you will use the convenient Trivy Kubernetes Operator created by the security experts Aqua Security Software Ltd, to execute an automatic scan of your cluster (the one created with the QuickStart tutorial) searching for vulnerabilities and producing detailed reports, all of these tasks will be executed via kubectl, like any other administrative task. It's assumed that you have under your control a VM named k8s with the single-node MicroK8s cluster running, as explained in the CPPServer QuickStart tutorial.
 
 ### Resources:
 
@@ -32,7 +32,7 @@ Execute:
 sudo microk8s kubectl get vulnerabilityreports -o wide -n cppserver
 ```
 
-This will scan the CPPServer docker image, for this case it will detect some (15) LOW vulnerabilities, from the Ubuntu 22.04 base image, these are not relevant, not only because of the low risk classification, but also because these are located in software modules that mostly won't be used during the container execution.
+This will scan the CPPServer docker images, for this case it will detect some (15) LOW vulnerabilities, all from the Ubuntu 22.04 base image, these are not relevant, not only because of the low risk classification, but also because these are located in software modules that mostly won't be used during the container execution.
 ```
 NAME                                        REPOSITORY            TAG    SCANNER   AGE   CRITICAL   HIGH   MEDIUM   LOW   UNKNOWN
 replicaset-cppserver-674b6775cd-cppserver   cppserver/pgsql       1.01   Trivy     21h   0          0      0        15    0
@@ -289,6 +289,8 @@ Report:
 Events:                <none>
 ```
 
+Canonical's official Ubuntu 22.04 LTS docker image is the base image of CPPServer's container image, we keep it up-to-date whenever we update CPPServer's image on Docker Hub.
+
 ## Step 3: Generate configuration audit report
 
 This is the most interesting report, because it does verify Kubernetes-specific security checks.
@@ -401,6 +403,11 @@ This is the relation between the report and the detail:
 
 In this case this is false-positive because the deployment of CPPServer for the QuickStart is running on a single-node cluster for testing and development tasks and for that reason it does use hostPath volumes (local filesystem) to store the website and the blobs, on production environments the website could reside inside the container image and the blob storage could be provided by a cluster-wide solution, like traditional NFS server, a Kubernetes-native storage, or a Cloud-provider storage. As you can see from the good audit results above, CPPServer deployment file (cppserver.yaml) does already include recommended security practices for Kubernetes.
 
+You can examine cppserver.yaml in, it's stored in /home/ubuntu on the VM used for the QuickStart tutorial, thanks to Trivy and its detailed reports, we were able to add all the recommended security-related fixes to the YAML file. To view your current cppserver.yaml:
+```
+cat $HOME/cppserver.yaml
+```
 
+Trivy will keep running and scanning your cluster, reports have a 24 hours validity by default, for more information visit Trivy Operator's website (see link at the beginning of this article).
 
 
