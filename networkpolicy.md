@@ -69,3 +69,8 @@ Output:
 networkpolicy.networking.k8s.io/cppserver created
 ```
 
+Test again direct access to the service (it may take a few seconds for the NetworkPolicy to take effect):
+```
+curl http://10.152.183.149:8080/ms/version -s | jq
+```
+
