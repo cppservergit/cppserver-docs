@@ -1,3 +1,4 @@
+# -- DRAFT -- instructions not working as expected yet
 # Adding a NetworkPolicy to protect access to the Pods
 
 ![Ingress-Service-Pod architecture](https://cppserver.com/files/ingress-diagram.png)
