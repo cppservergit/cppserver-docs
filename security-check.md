@@ -403,11 +403,12 @@ This is the relation between the report and the detail:
 
 In this case this is false-positive because the deployment of CPPServer for the QuickStart is running on a single-node cluster for testing and development tasks and for that reason it does use hostPath volumes (local filesystem) to store the website and the blobs, on production environments the website could reside inside the container image and the blob storage could be provided by a cluster-wide solution, like traditional NFS server, a Kubernetes-native storage, or a Cloud-provider storage. As you can see from the good audit results above, CPPServer deployment file (cppserver.yaml) does already include recommended security practices for Kubernetes.
 
-You can examine cppserver.yaml in, it's stored in /home/ubuntu on the VM used for the QuickStart tutorial, thanks to Trivy and its detailed reports, we were able to add all the recommended security-related fixes to the YAML file. To view your current cppserver.yaml:
+If you want to see the contents of cppserver.yaml, it's stored in /home/ubuntu on the VM used for the QuickStart tutorial, thanks to Trivy and its detailed reports, we were able to add all the recommended security-related fixes to the YAML file. To view your current cppserver.yaml:
 ```
 cat $HOME/cppserver.yaml
 ```
 
-Trivy will keep running and scanning your cluster, reports have a 24 hours validity by default, for more information visit Trivy Operator's website (see link at the beginning of this article).
+We can do more about security, like adding a Network Policy to block direct access to the CPPServer service, so that only the Ingress can access it. We don't have it by default in the QuickStart deployment, and Trivy is not checking its existence, there is an article on this repository focused on completing that Network Policy task.
 
+There are other security scanners for Kubernetes, like [Kube-Scape](https://github.com/kubescape/kubescape), this one will complain about the lack of SecurityPolicy on the CPPServer domain, which is a good thing, because having one helps restricting access to the Pods, on the other hand, Kube-Scape will trigger more less-relevant alerts, false-positives so to speak.
 
