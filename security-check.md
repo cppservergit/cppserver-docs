@@ -409,6 +409,3 @@ cat $HOME/cppserver.yaml
 ```
 
 We can do more about security, like adding a Network Policy to block direct access to the CPPServer service and Pods, so that only the Ingress can access it. We don't have NetworkPolicy in the QuickStart deployment because MicroK8s won't provide by default this feature on a single-node cluster, to test NetworkPolicy with MicroK8s we need a high-availability (HA) cluster, with at least 3 nodes, it's easy to build one using LXD containers using a single Multipass VM to host the whole cluster, we cover this in another article on this repository.
-
-
-
