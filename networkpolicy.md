@@ -1,4 +1,4 @@
-# -- DRAFT -- instructions not working as expected yet
+# -- DRAFT -- instructions not working as expected yet, requires MicroK8s HA Cluster, i won't work on single-node cluster
 # Adding a NetworkPolicy to protect access to the Pods
 
 ![Ingress-Service-Pod architecture](https://cppserver.com/files/ingress-diagram.png)
