@@ -408,7 +408,7 @@ If you want to see the contents of cppserver.yaml, it's stored in /home/ubuntu o
 cat $HOME/cppserver.yaml
 ```
 
-We can do more about security, like adding a Network Policy to block direct access to the CPPServer service, so that only the Ingress can access it. We don't have it by default in the QuickStart deployment, and Trivy is not checking its existence, there is an article on this repository focused on completing that Network Policy task.
+We can do more about security, like adding a Network Policy to block direct access to the CPPServer service and Pods, so that only the Ingress can access it. We don't have NetworkPolicy in the QuickStart deployment because MicroK8s won't provide by default this feature on a single-node cluster, to test NetworkPolicy with MicroK8s we need a high-availability (HA) cluster, with at least 3 nodes, it's easy to build one using LXD containers using a single Multipass VM to host the whole cluster, we cover this in another article on this repository.
 
-There are other security scanners for Kubernetes, like [Kube-Scape](https://github.com/kubescape/kubescape), this one will complain about the lack of NetworkPolicy on the CPPServer domain, which is a good thing, because having one helps restricting access to the Pods, on the other hand, Kube-Scape will trigger more less-relevant alerts than Trivy Operator.
+
 
