@@ -75,7 +75,7 @@ sudo DEBIAN_FRONTEND=noninteractive apt update && sudo apt upgrade -y && sudo ap
 
 On the same Linux terminal of the K8s VM you just created, execute:
 ```
-sudo snap install microk8s --classic --channel=1.26
+sudo snap install microk8s --classic --channel=1.27
 ```
 
 Test status:
