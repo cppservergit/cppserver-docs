@@ -270,6 +270,8 @@ Expected output:
 
 You've just created a C++ microservice without writing or compiling any C++ code, it's running at full machine-code speed thanks to the declarative facilities of CPPServer. You can exercise your skills checking the access logs of the Nginx Ingress to see how much time was spent processing this request.
 
+In this QuickStart deployment we use the static website as an external resource, a Kubernetes volume mapped to a host file system directory (/home/ubuntu/www), if you change any of the files under that directory, you just have to do a "rollout restart" in order reload the updated content, because CPPServer internal micro-webserver does use RAM cache to serve the static content at full speed, you won't see your changes to the content if you don't rollout-restart the deployment, take node please.
+
 ## Managing database connections with Kubernetes secrets
 
 CPPServer relies on Kubernetes secrets that are later injected into environment variables, during the QuickStart tutorial you defined 3 secrets (logindb, sessiondb and db1) to provide in a secure way the database connection properties for each database, this is an administrative task on production environments, programmers should have no access to these objects.
