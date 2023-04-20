@@ -78,7 +78,8 @@ ingress.networking.k8s.io/cppserver unchanged
 cronjob.batch/cppjob configured
 ```
 
-In the next section we will check the logs of the CPPServer Pod to verify the new value.
+When you change something in the deployment file (cppserver.yaml) you just run the command above to apply changes, if you change some resource defined outside this file, like a secret or a configMap, then you need another command, a rollout, to redeploy the Pods and reload these external resources. More on that later.
+In the next section we will check the logs of the CPPServer Pod to verify the new value of the environment variable.
 
 ## View CPPServer logs
 
