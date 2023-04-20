@@ -153,6 +153,166 @@ CPPServer records errors, warnings and informational messages according to its c
 {"source":"login","level":"info","msg":"void login::dbutil::reset_connection() connection to database demodb restored","thread":"140347352409664","x-request-id":"8b2e9d47966518d7262e4cff529a2011"}
 ```
 
+## Add a microservice to config.json
+
+Now you are going to edit config.json, declare a microservice definition, save it, update the configMap using this file and restart the deployment so it can see the new version of the configMap, this is a frequent and typical DevOps task when implementing microservices with CPPServer and Kubernetes. The file config.json is stored in your home directory:
+
+```
+nano config.json
+```
+
+Locate the beginning of the file, place the cursor under this section:
+```
+{
+        "services":
+        [
+```
+
+Paste this JSON fragment (including the coma at the end!), this is a microservice definition:
+```
+               {
+                        "db": "db1",
+                        "uri": "/ms/test",
+                        "sql": "select * from sp_shippers_view()",
+                        "function": "dbget",
+                        "secure": 0
+                },
+```
+
+It should look like this:
+```
+{
+        "services":
+        [
+                {
+                        "db": "db1",
+                        "uri": "/ms/test",
+                        "sql": "select * from sp_shippers_view()",
+                        "function": "dbget",
+                        "secure": 0
+                },
+                {
+                        "db": "db1",
+                        "uri": "/ms/gasto/view",
+                        "sql": "select * from sp_gasto_view()",
+                        "function": "dbget"
+                },
+...rest of the file...
+```
+
+We use "secure": 0 to allow unsecure execution (no previous login required), this is OK for quick testing, CPPServer always prints warnings when a Pod starts to signal all unsecure services in config.json. CTRL-x to save and exit.
+
+Update the configMap:
+```
+sudo microk8s kubectl create configmap cppserver-config  -n cppserver --from-file config.json --dry-run=client -o yaml | sudo microk8s kubectl apply -f -
+```
+
+Expected output:
+```
+configmap/cppserver-config configured
+```
+
+Now we need to restart the deployment so the Pods can read this new configuration:
+```
+sudo microk8s kubectl rollout restart deployment cppserver -n cppserver
+```
+
+Expected output:
+```
+deployment.apps/cppserver restarted
+```
+
+This is a fundamental command, if you change something not defined in cppserver.yaml (but referenced) you must run "rollout" in order to reload the Pods and reload the new resources, it might be a configMap as in this case, secrets or an updated container image that has the same version tag (so no changes in cppserver.yaml were made).
+
+Now let's test your new microservice:
+```
+curl https://k8s.mshome.net/ms/test -ks | jq
+```
+
+Expected output:
+```
+{
+  "status": "OK",
+  "data": [
+    {
+      "shipperid": 503,
+      "companyname": "Century 22 Courier",
+      "phone": "800-WE-CHARGE"
+    },
+    {
+      "shipperid": 13,
+      "companyname": "Federal Courier Venezuela",
+      "phone": "555-6728"
+    },
+    {
+      "shipperid": 3,
+      "companyname": "Federal Shipping",
+      "phone": "(503) 555-9931"
+    },
+    {
+      "shipperid": 1,
+      "companyname": "Speedy Express",
+      "phone": "(503) 555-9831"
+    },
+    {
+      "shipperid": 2,
+      "companyname": "United Package",
+      "phone": "(505) 555-3199"
+    },
+    {
+      "shipperid": 501,
+      "companyname": "UPS",
+      "phone": "500-CALLME"
+    }
+  ]
+}
+```
+
+You've just created a C++ microservice without writing or compiling any C++ code, it's running at full machine-code speed thanks to the declarative facilities of CPPServer. You can exercise your skills checking the access logs of the Nginx Ingress to see how much time was spent processing this request.
+
+## Managing database connections with Kubernetes secrets
+
+CPPServer relies on Kubernetes secrets that are later injected into environment variables, during the QuickStart tutorial you defined 3 secrets (logindb, sessiondb and db1) to provide in a secure way the database connection properties for each database, this is an administrative task on production environments, programmers should have no access to these objects.
+
+We are not goint to change any secret yet, unless you have your own PostgreSQL database and you want to create microservices using that database.
+This is how to define the secret for the business database, db1:
+
+```
+sudo microk8s kubectl create secret generic cpp-secret-db1 -n cppserver \
+  --from-literal=connstr="host=demodb.mshome.net port=5432 dbname=demodb connect_timeout=10 user=postgres password=basica application_name=CPPServer" \
+  --dry-run=client -o yaml | sudo microk8s kubectl apply -f -
+```
+
+To create/modify a secret you must have proper access to a node in the cluster, on production environment this should be restricted to Admins only.
+
+In cppserver.yaml we reference this secret using a secure environment variable:
+```
+          - name: CPP_DB1
+            valueFrom:
+              secretKeyRef:
+                name: cpp-secret-db1
+                key: connstr
+                optional: false
+```
+
+If you change a secret, a rollout is required in order to use the new version of the secret:
+```
+sudo microk8s kubectl rollout restart deployment cppserver -n cppserver
+```
+
+There is a version of CPPServer for Microsoft SQLServer, it's a different container image, [cppserver/mssql](https://hub.docker.com/r/cppserver/mssql) that must be referenced in cppserver.yaml instead of the default PostgreSQL version [cppserver/pgsql](https://hub.docker.com/r/cppserver/pgsql), for both variants of the container the SessionDB will always be a PostgreSQL DB, but the business database (db1...dbN) must be defined according to the container used. This is an example of the same cpp-secret-db1 for SQL Server using an open source ODBC driver for Linux:
+```
+sudo microk8s kubectl create secret generic cpp-secret-db1 -n cppserver \
+  --from-literal=connstr="Driver=FreeTDS;SERVER=demodb.mshome.net;PORT=1433;DATABASE=demodb;UID=sa;PWD=basica;APP=CPPServer;Encryption=off;ClientCharset=UTF-8" \
+  --dry-run=client -o yaml | sudo microk8s kubectl apply -f -
+```
+
+If you want to use CPPServer for SQLServer then you have to change in this order:
+* Update cpp-secret-db1 using the appropiate connection properties for your case, as shown above.
+* Edit cppserver.yaml and change the image property to reference cppserver/mssql instead of cppserver/pgsql
+* Use the command to apply cppserver.yaml, no need to rollout.
+
+
 
 
 
