@@ -2,7 +2,7 @@
 
 These are step-by-step instructions to execute the most common Admin tasks, but also those tasks that will be frequently required during development, like adding a microservice definition and then restart the Pods of CPPServer.
 
-This tasks assume that you have a working cluster according to the QuickStart tutorial available in this Repo.
+These tasks assume that you have a working cluster according to the QuickStart tutorial available in this Repo.
 
 It's highly recommended at this point after completing the QuickStart tutorial, to get yourself introduced to basic Kubernetes concepts, there are excellent brief tutorials on the Internet, also check the contents of this Repo and read "Anatomy of a C++ microservice" to get a quick view of CPPServer concepts. Both materials will give you a better understanding of the tasks below.
 
