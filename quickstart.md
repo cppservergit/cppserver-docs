@@ -428,7 +428,7 @@ This web development model was built from the start to be easily converted into 
 
 There are 10.000 users available (user1...user10000), these are used by a stress test client application we use to test CPPServer reliability, more on this later if you are interested in running these tests, contact us! 
 
-Congrats! you've finished the first part of this tutorial, what comes next? a series of typical development tasks, like adding your own microservices to config.json, refreshing the cluster to read your changes, and more: (Administrative Tasks)[https://github.com/cppservergit/cppserver-docs/blob/main/admin-tasks.md]
+Congrats! you've finished the first part of this tutorial, what comes next? a series of typical development tasks, like adding your own microservices to config.json, refreshing the cluster to read your changes, and more: [Administrative Tasks](https://github.com/cppservergit/cppserver-docs/blob/main/admin-tasks.md)
 
 Contact us: cppserver@martincordova.com
 
