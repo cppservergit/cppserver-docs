@@ -270,7 +270,37 @@ Expected output:
 
 You've just created a C++ microservice without writing or compiling any C++ code, it's running at full machine-code speed thanks to the declarative facilities of CPPServer. You can exercise your skills checking the access logs of the Nginx Ingress to see how much time was spent processing this request.
 
-In this QuickStart deployment we use the static website as an external resource, a Kubernetes volume mapped to a host file system directory (/home/ubuntu/www), if you change any of the files under that directory, you just have to do a "rollout restart" in order reload the updated content, because CPPServer internal micro-webserver does use RAM cache to serve the static content at full speed, you won't see your changes to the content if you don't rollout-restart the deployment, take node please.
+## Updating the static website
+
+In this QuickStart deployment we use the static website as an external resource, a Kubernetes volume mapped to a host file system directory (/home/ubuntu/www), if you change any of the files under that directory, you just have to do a "rollout restart" in order reload the updated content, because CPPServer internal micro-webserver does use RAM cache to serve the static content at full speed, you won't see your changes to the content if you don't rollout-restart the deployment, take note please.
+
+Edit website and change the title of the page:
+```
+nano www/demo/index.html
+```
+
+Change it to:
+```
+                <title>Hello World Kubernetes!</title>
+```
+CTRL-x to save the file.
+
+Restart the Pods to reload the website:
+```
+sudo microk8s kubectl rollout restart deployment cppserver -n cppserver
+```
+
+Expected output:
+```
+deployment.apps/cppserver restarted
+```
+
+Using a browser navigate to the page:
+```
+http://k8s.mshome.net/demo/index.html
+```
+You should see the updated page title on the browser Tab. Whenever you change the static content of the website, you must execute a rollout so the Pods will be recreated and will read the files from disk storage the first time these are requested, afterwards the content will be server from the Pods' RAM, this is by-design of the micro-HTTP-server inside CPPServer, this behavour may change in the future and no rollout could be required.
+Also consider that the website might be incorporated into the container, in this case, in order to update the website a rollout must be executed to reload the Pods, or if you change the container's version in cppserver.yaml, then a "microk8s kubectl apply -f ...." must be executed so that Kubernetes will pull the new image and recreate the Pods. The website storage strategy is up to you and depends on your deployment architecture (multiple pods across many nodes?) and your specific development needs. For single-node deployment like the one used in this tutorial, having a local filesystem storage mapped to a volume makes sense and allow for easy refresh to see the new content, this can be automated with a script, for production, using an NFS server that all Pod instances can access may be more suitable and easy to configure.
 
 ## Managing database connections with Kubernetes secrets
 
