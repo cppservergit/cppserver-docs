@@ -85,7 +85,9 @@ sudo microk8s status --wait-ready
 
 Install add-ons:
 ```
-sudo microk8s enable dns hostpath-storage ingress metrics-server
+sudo microk8s enable hostpath-storage 
+sudo microk8s enable ingress 
+sudo microk8s enable metrics-server
 ```
 
 Test installation status by checking the system Pods (containers):
