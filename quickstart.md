@@ -93,9 +93,6 @@ sudo microk8s enable ingress
 ```
 sudo microk8s enable metrics-server
 ```
-```
-sudo microk8s enable dns
-```
 
 Test installation status by checking the system Pods (containers):
 ```
