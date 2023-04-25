@@ -342,11 +342,64 @@ sudo microk8s kubectl create secret generic cpp-secret-db1 -n cppserver \
 If you want to use CPPServer for SQLServer then you have to change in this order:
 * Update cpp-secret-db1 using the appropiate connection properties for your case, as shown above.
 * Edit cppserver.yaml and change the image property to reference cppserver/mssql instead of cppserver/pgsql
-* Use the command to apply cppserver.yaml, no need to rollout.
+* Use the command to apply cppserver.yaml, no need to rollout (sudo microk8s kubectl apply -f cppserver.yaml).
 
+## Deploy multiple Pods
 
+Edit cppserver.yaml and locate this line:
+```
+spec:
+  replicas: 1
+```
 
+Change it to:
+```
+spec:
+  replicas: 2
+```
+CTRL-x to save the file.
 
+Restart the Pods to reload the website:
+```
+sudo microk8s kubectl apply -f cppserver.yaml
+```
 
+Expected output:
+```
+deployment.apps/cppserver configured
+service/cppserver unchanged
+ingress.networking.k8s.io/cppserver unchanged
+cronjob.batch/cppjob configured
+```
 
+Test it:
+```
+sudo microk8s kubectl get pods -n cppserver -l app=cppserver
+```
 
+Expected output:
+```
+NAME                        READY   STATUS    RESTARTS   AGE
+cppserver-97bcd75c7-9wchn   1/1     Running   0          85m
+cppserver-97bcd75c7-zqsms   1/1     Running   0          77s
+```
+
+Whenever a request is made to a microservice, the Ingress will load balance the request between these two Pods, using the Service defined between the Pods and the Ingress, please inspect the file cppserver.yaml to see the definition of each object, the Pod template, the Service and the Ingress, the later exposes on the Node (VM) IP address the microservices via HTTP/HTTPS (with a self-generated certificate).
+
+If you were using a multi-node (multiple VMs) cluster, the Pods would be instantiated on any node of the cluster, depending on several factors, Kubernetes takes care of all that. In that case you can add a flag to the command to list the pods, so you can see on which node are they running:
+```
+sudo microk8s kubectl get pods -n cppserver -l app=cppserver -o wide
+```
+
+In our single-node case, the node is the same for both Pods:
+```
+NAME                        READY   STATUS    RESTARTS   AGE     IP           NODE   NOMINATED NODE   READINESS GATES
+cppserver-97bcd75c7-9wchn   1/1     Running   0          92m     10.1.77.46   k8s    <none>           <none>
+cppserver-97bcd75c7-zqsms   1/1     Running   0          7m55s   10.1.77.21   k8s    <none>           <none>
+```
+
+## Resources - highly recommended tutorials
+
+* [MicroK8s in high-availability mode](https://microk8s.io/docs/clustering)
+* [Kubernetes explained in 6 minutes](https://youtu.be/TlHvYWVUZyc)
+* [Get started with Kubernetes](https://www.suse.com/c/rancher_blog/91081/)
