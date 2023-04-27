@@ -446,16 +446,17 @@ It will allow every node of the cluster to collect OS related metrics and export
 sudo microk8s kubectl top nodes
 ```
 ```
-NAME        CPU(cores)   CPU%   MEMORY(bytes)   MEMORY%
-k8s         159m         3%     2026Mi          53%
+NAME   CPU(cores)   CPU%   MEMORY(bytes)   MEMORY%
+k8s    401m         10%    2233Mi          58%
 ```
 
 ```
 sudo microk8s kubectl top pods -n cppserver
 ```
 ```
-NAME                                    CPU(cores)   MEMORY(bytes)
-cppserver-5f66f5d57f-5mqz5              1m           3Mi
+NAME                        CPU(cores)   MEMORY(bytes)
+cppserver-b9ff7c4d4-sjjzt   1m           4Mi
+cppserver-b9ff7c4d4-wm7m9   1m           3Mi
 ```
 
 ## Resources - highly recommended tutorials
