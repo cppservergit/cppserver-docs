@@ -403,7 +403,7 @@ cppserver-97bcd75c7-zqsms   1/1     Running   0          7m55s   10.1.77.21   k8
 If you have more than one Pod, printing logs Pod-by-Pod is tedious, with this script you can print the logs of all Pods at once.
 Just paste this bash script on your terminal and press enter.
 
-### Ingres
+### NGinx Ingress
 
 ```
 for pod in $(sudo microk8s kubectl get pods -o name -n ingress); 
@@ -447,7 +447,7 @@ sudo microk8s kubectl top nodes
 ```
 ```
 NAME        CPU(cores)   CPU%   MEMORY(bytes)   MEMORY%
-k8s   159m         3%     2026Mi          53%
+k8s         159m         3%     2026Mi          53%
 ```
 
 ```
