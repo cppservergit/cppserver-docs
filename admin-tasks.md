@@ -297,7 +297,7 @@ deployment.apps/cppserver restarted
 
 Using a browser navigate to the page:
 ```
-http://k8s.mshome.net/demo/index.html
+https://k8s.mshome.net/demo/index.html
 ```
 You should see the updated page title on the browser Tab. Whenever you change the static content of the website, you must execute a rollout so the Pods will be recreated and will read the files from disk storage the first time these are requested, afterwards the content will be server from the Pods' RAM, this is by-design of the micro-HTTP-server inside CPPServer, this behavour may change in the future and no rollout could be required.
 Also consider that the website might be incorporated into the container, in this case, in order to update the website a rollout must be executed to reload the Pods, or if you change the container's version in cppserver.yaml, then a "microk8s kubectl apply -f ...." must be executed so that Kubernetes will pull the new image and recreate the Pods. The website storage strategy is up to you and depends on your deployment architecture (multiple pods across many nodes?) and your specific development needs. For single-node deployment like the one used in this tutorial, having a local filesystem storage mapped to a volume makes sense and allow for easy refresh to see the new content, this can be automated with a script, for production environments with high-availability clusters (3+ nodes), using an NFS server that all Pod instances can access may be a more suitable solution and easy to configure too.
@@ -398,8 +398,70 @@ cppserver-97bcd75c7-9wchn   1/1     Running   0          92m     10.1.77.46   k8
 cppserver-97bcd75c7-zqsms   1/1     Running   0          7m55s   10.1.77.21   k8s    <none>           <none>
 ```
 
+## Print logs of all the Pods in one namespace
+
+If you have more than one Pod, printing logs Pod-by-Pod is tedious, with this script you can print the logs of all Pods at once.
+Just paste this bash script on your terminal and press enter.
+
+### Ingres
+
+```
+for pod in $(sudo microk8s kubectl get pods -o name -n ingress); 
+  do sudo microk8s kubectl logs ${pod} -n ingress
+done
+```
+
+### CPPServer
+
+```
+for pod in $(sudo microk8s kubectl get pods -o name -n cppserver); 
+  do sudo microk8s kubectl logs ${pod} -n cppserver --timestamps
+done
+```
+
+This works for any number of Pods and Nodes, it's cluster-wide.
+
+## Testing endpoints for Prometheus metrics
+
+CPPServer, Nginx Ingress Controller and the Kubernet system itself, all of them can export metrics for Prometheus, the most popular open-source metrics collector system, by Grafana. This is very important for the observability of your cluster, and it is a common practice in modern Cloud platforms. Both CPPServer and Ingress have built-in support for this, for the MicroK8s Cluster some additional components are required.
+
+CPPServer metrics endpoint:
+```
+curl http://k8s.mshome.net/ms/metrics
+```
+
+Ingress metrics endpoint:
+```
+curl http://k8s.mshome.net:10254/metrics
+```
+
+For the cluster nodes to export metrics to Prometheus some components must be installed on the cluster, this is covered in this article:
+[Kubernetes Node exporter](https://devopscube.com/node-exporter-kubernetes/)
+
+It will allow every node of the cluster to collect OS related metrics and export an endpoint so that Prometheus can collect metrics of the whole cluster, Prometheus can run as a standalone server outside the cluster, or as an application deployed inside the Kubernetes cluster, which makes this whole setup more tightly integrated.
+
+### kubectl metrics
+
+```
+sudo microk8s kubectl top nodes
+```
+```
+NAME        CPU(cores)   CPU%   MEMORY(bytes)   MEMORY%
+k8s   159m         3%     2026Mi          53%
+```
+
+```
+sudo microk8s kubectl top pods -n cppserver
+```
+```
+NAME                                    CPU(cores)   MEMORY(bytes)
+cppserver-5f66f5d57f-5mqz5              1m           3Mi
+```
+
 ## Resources - highly recommended tutorials
 
 * [MicroK8s in high-availability mode](https://microk8s.io/docs/clustering)
 * [Kubernetes explained in 6 minutes](https://youtu.be/TlHvYWVUZyc)
 * [Get started with Kubernetes](https://www.suse.com/c/rancher_blog/91081/)
+* [75 Kubernetes concepts in short](https://medium.com/@bubu.tripathy/top-75-kubernetes-questions-and-answers-d677a0b87d79)
+
