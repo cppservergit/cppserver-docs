@@ -4,14 +4,14 @@ In this tutorial you will use the convenient Trivy Kubernetes Operator created b
 
 ### Resources:
 
-* [Trivy Operator website](https://aquasecurity.github.io/trivy-operator/v0.13.0/)
+* [Trivy Operator website](https://aquasecurity.github.io/trivy-operator/v0.13.2/)
 * [CPPServer QuickStart with MicroK8s](https://github.com/cppservergit/cppserver-docs/blob/main/quickstart.md)
 
 ## Step 1: Install Trivy
 
 Enter in your cluster Linux terminal and execute:
 ```
-sudo microk8s kubectl apply -f https://raw.githubusercontent.com/aquasecurity/trivy-operator/v0.13.0/deploy/static/trivy-operator.yaml
+sudo microk8s kubectl apply -f https://raw.githubusercontent.com/aquasecurity/trivy-operator/v0.13.2/deploy/static/trivy-operator.yaml
 ```
 
 Execute this to test if the Operator is running:
