@@ -143,4 +143,14 @@ If you want to see the contents of cppserver.yaml, it's stored in /home/ubuntu o
 cat $HOME/cppserver.yaml
 ```
 
-We can do more about security, like adding a Network Policy to block direct access to the CPPServer service and Pods, so that only the Ingress can access it. We don't have NetworkPolicy in the QuickStart deployment because MicroK8s won't provide by default this feature on a single-node cluster, to test NetworkPolicy with MicroK8s we need a high-availability (HA) cluster, with at least 3 nodes, it's easy to build one using LXD containers on a single Multipass VM to host the whole cluster, we cover this in another article on this repository.
+## Uninstall Trivy
+
+If you don't need to keep Trivy running on your cluster just execute this command:
+```
+sudo microk8s kubectl delete -f https://raw.githubusercontent.com/aquasecurity/trivy-operator/v0.13.2/deploy/static/trivy-operator.yaml
+```
+Wait a few seconds while it does remove all the Trivy components.
+
+## Additional notes
+
+We can do more about security, like adding a Network Policy to block direct access to the CPPServer service and Pods, so that only the Ingress can access it. We don't have NetworkPolicy in the QuickStart deployment because MicroK8s won't provide by default this feature on a single-node cluster, to test NetworkPolicy with MicroK8s we need a high-availability (HA) cluster, with at least 3 nodes, it's easy to build one using LXD containers inside a single Multipass VM to host the whole cluster, we cover this in another article on this repository.
