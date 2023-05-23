@@ -4,7 +4,7 @@
 
 CPPServer is a high-performance declarative microservices engine for PostgreSQL/SQLServer [written in C++](https://github.com/cppservergit/cppserver-pgsql), compiled to optimized machine code, for Kubernetes and Cloud serverless services like Azure Container Apps. A single container can serve thousands of microservices in a secure way. Incorporates built-in observability features like JSON stderr logs, direct push to Loki, Prometheus end-point for metrics and tracing.
 
-![CPPServer basic concept - declarative microservices](https://cppserver.com/cppserver-basic-model.png)
+![api-definition](https://github.com/cppservergit/cppserver-docs/assets/126841556/23fe1d10-549a-47b8-8ca3-53dc8a4376e3)
 
 It allows to create a microservice using JSON, the engine will translate that into a call to a C++ function which in turn calls the native PostgreSQL client API for C, no programming required, easy to test using curl or a browser, plain simple and fast:
 
@@ -70,8 +70,11 @@ JSON Response:
 
 Internally CPPServer is an EPOLL event-based async server, with one thread CPPServer can serve thousands of connections, it does use a configurable worker-threads pool (default size is 4 threads) to run in background the microservices meanwhile the main thread keeps processing requests. It has been tested with 10.000 concurrent users bombarding the server, in standalone mode (systemd service), as a container in a Kubernetes cluster behind an Ingress, and as a Container App in Azure.
 
+![thread-pool](https://github.com/cppservergit/cppserver-docs/assets/126841556/bd39274c-603e-4d61-9b57-83154980ea45)
+
 CPPServer is vendor-agnostic, it was designed and built to run from Laptops to On-Prem HA clusters and Cloud managed serverless services.
-![CPPServer basic container vendor agnostic](https://cppserver.com/container-image.png)
+
+![container image structure](https://github.com/cppservergit/cppserver-docs/assets/126841556/093b88cd-74fe-444f-9f25-081401af3035)
 
 ## Resources:
 
