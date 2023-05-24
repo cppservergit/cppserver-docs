@@ -68,7 +68,7 @@ JSON Response:
 }
 ```
 
-Internally CPPServer is an EPOLL event-based async server, with one thread CPPServer can serve thousands of connections, it does use a configurable worker-threads pool (default size is 4 threads) to run in background the microservices meanwhile the main thread keeps processing requests. It has been tested with 10.000 concurrent users bombarding the server, in standalone mode (systemd service), as a container in a Kubernetes cluster behind an Ingress, and as a Container App in Azure.
+Internally CPPServer is an EPOLL event-based async server, with one thread CPPServer can serve thousands of connections, it does use a configurable worker-threads pool (default size is 4 threads) to run in background the microservices meanwhile the main thread keeps processing requests. It has been tested with up to 20000 concurrent users bombarding the server, in standalone mode (systemd service), as a container in a Kubernetes cluster behind an Ingress, and as a Container App in Azure.
 
 ![thread-pool](https://github.com/cppservergit/cppserver-docs/assets/126841556/bd39274c-603e-4d61-9b57-83154980ea45)
 
