@@ -209,7 +209,7 @@ REVOKE ALL ON PROCEDURE public.cpp_session_timeout() FROM PUBLIC;
 
 Before getting into the details of the security process, let's review the general model of CPPServer alone:
 
-![api-definition](https://github.com/cppservergit/cppserver-docs/assets/126841556/b32159dd-01ca-4c3e-bd13-de0d0c82c6e0)
+![basic-workflow](https://github.com/cppservergit/cppserver-docs/assets/126841556/b24eea8c-8df7-4b06-9555-a4f23b5cb4f5)
 
 The CPPServer process reads on startup a configuration file /etc/cppserver/config.json where the microservices definitions are stored, it will parse this file once and then it will start listening to requests that should map some of the services defined in config.json, in this file, each service will define its properties, like path, C++ function to execute, SQL to execute and also some security constraints, or lack of security if required! This config.json file is central to the operation of CPPServer, here is where the no-code declarative part of the CPPServer approach resides.
 
@@ -244,7 +244,7 @@ CREATE OR REPLACE FUNCTION public.cpp_dblogin(
 ```
 
 If the login was successful a resultset of 1 row is expected with 3 columns, the "rolenames" column must contain the user's roles separated by comma ",".
-An empty resultset is interpreted as a failed login. If the login succeeds then this LoginServer will create a security session for the user by inserting a row in the public.cpp_session table in the session database using another database function for this purpose which is part of the CPPServer database support layer for session management, as explained before.
+An empty resultset is interpreted as a failed login. If the login succeeds then this LoginServer will create a security session for the user by inserting a row in the public.cpp_session table in the session database using another database function for this purpose, cpp_session_create(...), which is part of the CPPServer database support layer for session management, as explained before. The login service will return a JSON response and the cookie with the new SessionID, which the client must send from now on in order to be validated as a valid security session. The session record can be deleted by timeout (session expiration) or because of a login using the same user's credentials. A user can only have one active security session.
 
 Here is an example of the cpp_dblogin SQL function using our security schema from DemoDB:
 ```
@@ -315,3 +315,104 @@ This is a fragment of the loginserver.yaml file used to deploy it on Kubernetes,
                 optional: false
 ```
 
+The LoginServer container exposes two microservices for login purposes:
+
+* /loginserver/login: login using cpp_dblogin() SQL function and a PostgreSQL login database provided by the customer
+* /loginserver/loginldap: login using an LDAP server, must be configures using environment variables as shown above
+
+**NOTE**: If you are using CPPServer only (no LoginServer) then only the service /ms/login (SQL function cpp_dblogin) will be available, this is the case with the QuickStart deployment.
+
+** Login and Session creation in action
+
+Lets use the QuickStart deployment to test the security system, in this case it's using SQL function cpp_dblogin().
+
+**Case 1**: access a secured microservice /ms/shippers/view without a valid security session (no previous login)
+```
+curl https://k8s.mshome.net/ms/shippers/view -ki
+```
+
+Output:
+```
+HTTP/2 401
+date: Thu, 25 May 2023 15:54:21 GMT
+content-type: text/plain
+content-length: 35
+access-control-allow-origin: null
+access-control-allow-credentials: true
+strict-transport-security: max-age=15724800; includeSubDomains
+x-frame-options: SAMEORIGIN
+
+Please login with valid credential
+```
+
+**Case 2**: login with invalid credentials using microservice /ms/login
+```
+curl "https://k8s.mshome.net/ms/login?login=mcordova&password=whatever" -ki
+```
+
+Output:
+```
+HTTP/2 200
+date: Thu, 25 May 2023 15:59:02 GMT
+content-type: application/json
+content-length: 94
+access-control-allow-origin: null
+access-control-allow-credentials: true
+access-control-expose-headers: content-disposition
+strict-transport-security: max-age=15724800; includeSubDomains
+x-frame-options: SAMEORIGIN
+x-request-id: 277b10214824a8a53fd283cb752cc299
+
+{"status": "INVALID", "validation": {"id": "login", "description": "$err.invalidcredentials"}}
+```
+
+**Case 3**: login with valid credentials using microservice /ms/login
+```
+curl "https://k8s.mshome.net/ms/login?login=mcordova&password=basica" -ki
+```
+
+Output:
+```
+HTTP/2 200
+date: Thu, 25 May 2023 16:02:23 GMT
+content-type: application/json
+content-length: 61
+access-control-allow-origin: null
+access-control-allow-credentials: true
+access-control-expose-headers: content-disposition
+strict-transport-security: max-age=15724800; includeSubDomains
+x-frame-options: SAMEORIGIN
+set-cookie: CPPSESSIONID=9529-8262d677-c78b-4308-b97f-6a0816b11199; Path=/; SameSite=None; Secure; HttpOnly
+x-request-id: 3f7c1b40ee08245a2ffe1d73632a3dcf
+
+{"status": "OK", "data":[{"displayname":"Martín Córdova"}]}
+```
+
+After a successful login a security session record is created in the SessionDB database, the table cpp_session, now contains a row like this:
+|session_id|user_login|login_time|last_access_time|ip_addr|mail|uuid|roles|
+9529|mcordova|2023-05-25 16:02:23.606376|2023-05-25 16:02:23.606376|172.30.195.171|martin.cordova@gmail.com|8262d677-c78b-4308-b97f-6a0816b11199|can_delete, can_insert, can_update, sysadmin|
+
+The value of CPPSESSIONID is the concatenation of session_id and uuid columns. Now we can use the cookie value (session ticket) to request a secure microservice, but we must hurry up before the session expires!
+
+**Case 4**: access a secured microservice /ms/shippers/view with a valid session ticket (cookie)
+```
+curl https://k8s.mshome.net/ms/shippers/view -ki -H "cookie: CPPSESSIONID=9529-8262d677-c78b-4308-b97f-6a0816b11199"
+```
+
+Output:
+```
+HTTP/2 200
+date: Thu, 25 May 2023 16:10:59 GMT
+content-type: application/json
+content-length: 456
+access-control-allow-origin: null
+access-control-allow-credentials: true
+access-control-expose-headers: content-disposition
+strict-transport-security: max-age=15724800; includeSubDomains
+x-frame-options: SAMEORIGIN
+x-request-id: bca347c4db8962efcaf1c530956db1b5
+
+{"status":"OK","data":[{"shipperid":503,"companyname":"Century 22 Courier","phone":"800-WE-CHARGE"},{"shipperid":13,"companyname":"Federal Courier Venezuela","phone":"555-6728"},{"shipperid":3,"companyname":"Federal Shipping","phone":"(503) 555-9931"},{"shipperid":1,"companyname":"Speedy Express","phone":"(503) 555-9831"},{"shipperid":2,"companyname":"United Package","phone":"(505) 555-3199"},{"shipperid":501,"companyname":"UPS","phone":"500-CALLME"}]}
+```
+
+The session ticket was validated by CPPServer and the microservice was succesfully executed.
