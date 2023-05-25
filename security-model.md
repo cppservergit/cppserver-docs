@@ -282,9 +282,8 @@ GRANT EXECUTE ON FUNCTION public.cpp_dblogin(character varying, character varyin
 GRANT EXECUTE ON FUNCTION public.cpp_dblogin(character varying, character varying) TO postgres;
 
 REVOKE ALL ON FUNCTION public.cpp_dblogin(character varying, character varying) FROM PUBLIC;
-
 ```
-NOTE: For security reasons, the database role used to connect to LoginDB should only have permissions to execute cpp_dblogin(), nothing more, and the permission to execute this function should be assigned to this role only.
+NOTE: For security reasons, the database role used to connect to LoginDB should only have permissions to execute cpp_dblogin, nothing more, and the permission to execute this function should be assigned to this role only.
 
 LoginServer can also use an LDAP server if properly configured in its environment variables, it does use the standard C API for LDAP to connect to OpenLDAP or ActiveDirectory.
 This is a fragment of the loginserver.yaml file used to deploy it on Kubernetes, here you can see the environment variables relevant to the security tasks, including the LDAP configuration.
@@ -314,17 +313,16 @@ This is a fragment of the loginserver.yaml file used to deploy it on Kubernetes,
                 key: connstr
                 optional: false
 ```
-
 The LoginServer container exposes two microservices for login purposes:
 
-* /loginserver/login: login using cpp_dblogin() SQL function and a PostgreSQL login database provided by the customer
+* /loginserver/login: login using cpp_dblogin SQL function and a PostgreSQL login database provided by the customer
 * /loginserver/loginldap: login using an LDAP server, must be configures using environment variables as shown above
 
-**NOTE**: If you are using CPPServer only (no LoginServer) then only the service /ms/login (SQL function cpp_dblogin) will be available, this is the case with the QuickStart deployment.
+__NOTE__: If you are using CPPServer only (no LoginServer) then only the service /ms/login (SQL function cpp_dblogin) will be available, this is the case with the QuickStart deployment.
 
-** Login and Session creation in action
+## Login and Session creation in action
 
-Lets use the QuickStart deployment to test the security system, in this case it's using SQL function cpp_dblogin().
+Let's use the QuickStart deployment to test the security system, in this case it's using SQL function cpp_dblogin.
 
 **Case 1**: access a secured microservice /ms/shippers/view without a valid security session (no previous login)
 ```
@@ -390,7 +388,8 @@ x-request-id: 3f7c1b40ee08245a2ffe1d73632a3dcf
 
 After a successful login a security session record is created in the SessionDB database, the table cpp_session, now contains a row like this:
 |session_id|user_login|login_time|last_access_time|ip_addr|mail|uuid|roles|
-9529|mcordova|2023-05-25 16:02:23.606376|2023-05-25 16:02:23.606376|172.30.195.171|martin.cordova@gmail.com|8262d677-c78b-4308-b97f-6a0816b11199|can_delete, can_insert, can_update, sysadmin|
+|----------|----------|----------|----------|----------|----------|----------|----------|
+|9529|mcordova|2023-05-25 16:02:23.606376|2023-05-25 16:02:23.606376|172.30.195.171|cppserver@martincordova.com|8262d677-c78b-4308-b97f-6a0816b11199|can_delete, can_insert, can_update, sysadmin|
 
 The value of CPPSESSIONID is the concatenation of session_id and uuid columns. Now we can use the cookie value (session ticket) to request a secure microservice, but we must hurry up before the session expires!
 
@@ -416,3 +415,15 @@ x-request-id: bca347c4db8962efcaf1c530956db1b5
 ```
 
 The session ticket was validated by CPPServer and the microservice was succesfully executed.
+If the session expires, meaning the corresponding session row would be deleted from the table by the CPPJob task, then the above request would receive an HTTP 401 (login required) response.
+
+## Conclusion - the security contract
+
+Once LoginServer (or CPPServer) has provided a valid session ticket (cookie) after a successful login, CPPServer enforces this contract:
+
+* No secure microservice will be executed without proper authentication and authorization
+* If a secure microservice has no specific authorization restrictions (authorized roles) then its execution will be granted with proper authentication
+* Proper authentication is verified by contrasting the supplied CPPSESSIONID cookie in the request with a corresponding row in the SessionDB database (cpp_session table)
+* Proper authorization occurs if any of the roles associated to the session (stored in cpp_session table) matched any of the roles defined for the microservice in config.json
+* If an attacker with superuser PostgreSQL privileges has access to the SessionDB then security will be compromised, in the current version CPPServer has no way to detect if a session record in SessionDB was created by a valid login
+
