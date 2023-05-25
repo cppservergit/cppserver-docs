@@ -284,6 +284,7 @@ GRANT EXECUTE ON FUNCTION public.cpp_dblogin(character varying, character varyin
 REVOKE ALL ON FUNCTION public.cpp_dblogin(character varying, character varying) FROM PUBLIC;
 
 ```
+NOTE: For security reasons, the database role used to connect to LoginDB should only have permissions to execute cpp_dblogin(), nothing more, and the permission to execute this function should be assigned to this role only.
 
 LoginServer can also use an LDAP server if properly configured in its environment variables, it does use the standard C API for LDAP to connect to OpenLDAP or ActiveDirectory.
 This is a fragment of the loginserver.yaml file used to deploy it on Kubernetes, here you can see the environment variables relevant to the security tasks, including the LDAP configuration.
