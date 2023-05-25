@@ -205,4 +205,19 @@ GRANT EXECUTE ON PROCEDURE public.cpp_session_timeout() TO postgres;
 REVOKE ALL ON PROCEDURE public.cpp_session_timeout() FROM PUBLIC;
 ```
 
+## The security workflow for CPPServer requests
+
+Before getting into the details of the security process, let's review the general model of CPPServer alone:
+
+![api-definition](https://github.com/cppservergit/cppserver-docs/assets/126841556/b32159dd-01ca-4c3e-bd13-de0d0c82c6e0)
+
+The CPPServer process reads on startup a configuration file /etc/cppserver/config.json where the microservices definitions are stored, it will parse this file once and then will start listening to requests, that should map some of the services defined in config.json, in this file, each service will define its properties, like path, C++ function to execute, SQL to execute and also some security constraints, or lack of security if required! This config.json file is central to the operation of CPPServer, here is where the no-code, declarative part of the CPPServer approach resides.
+
+So let´s review what happens when a request arrives.
+
+1. An HTTP request to execute a microservice (GET/POST) hits a CPPServer process.
+2. If the session (represented by the cookie CPPSESSIONID) does not exist in SessionDB or the cookie was not present, and the microservice is secure (default) then an HTTP code 401 (invalid request, login required) will be returned to the client, the microservice will NOT be executed.
+3. If the microservice is not secured (it has the "secure" attribute set to 0 in config.json) then the microservice will be executed even if there is no valid security session associated to the request, restrictions on authorized roles are ignored if the microservice is not secure, by default all microservices are secure unless explicitly defined in config.json, and a warning when starting the CPPServer process will be printed to the logs.
+4. If the request passes the authentication test but the microservice has a roles restriction defined in config.json (authorized roles that can execute the microservice) then it will compare the roles associated to the security session with the list of authorized roles, a nano-seconds operation, and if the authorization test is not passed, a JSON response with status "INVALID" will be returned, and the validation fields in the response will contain information to let the client know without ambiguity that the request was rejected for lack of permissions. For this case an HTTP code 200 is returned, please refere to the [CPPServer JSON spec](https://github.com/cppservergit/cppserver-docs/blob/main/json_response_spec.pdf) for detailed information about how CPPServer responds to different situations. In general, CPPServer will always return 200, even on validation tests and errors, unless the authentication test fails, in which case it does return 401.
+5. If the request passes the authentication and authorization tests, then the microservice will be executed.
 
