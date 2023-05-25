@@ -1,0 +1,192 @@
+# CPPServer Security Model
+
+To invoke a microservice, which is basically sending a GET/POST request to CPPServer, the client must provide a session ID cookie with the name CPPSESSIONID, the value of this cookie has to be obtained via a previous successful login using a customer provided authentication backend. CPPServer includes a separate component, LoginServer, which serves the purpose of exposing the microservices for authentication (via DBMS or LDAP), and upon successful login, a valid session record will be created in the SessionDB and the client will receive a response with the corresponding session ID, which must be sent afterwwards on every request to execute a microservice, using the cookie mentioned before, this way the session can be validated, the current user's basic information (login name, email, roles) can be retrieved in microseconds and the security enforcement layer inside CPPServer can be applied before granting execution of the request. This is the basic process of authentication and authorization.
+There is a third component, CPPJob, a scheduled task or job, that runs every N minutes and deletes expired sessions according to a pre-configured timeout.
+
+![security-model](https://github.com/cppservergit/cppserver-docs/assets/126841556/763e45a1-d217-4524-be90-75234a6ea6e1)
+
+Regardeless of the database used for the business, the session database requires PostgreSQL, it's only a single table stored in the public schema, designed for the specific purpose of making very fast inserts and updates of single rows, since this will happen a lot during high concurrency periods. The database does not demand lots of resources, it can be easily provisioned using a VM with 4gb of RAM and docker, the QuickStart tutorial shows how easy it is to automate the whole installation of the software and the creation of the database, in minutes.
+
+All our containers are stateless, they create the illusion of a servlet-like session manager -so to speak- by using this table stored outside the cluster, so all the nodes of the cluster can access it for different purposes, like creating a new session, updating a session or deleting expired sessions, it is up to the database administrator to create specific database roles to access the different objects, functions and procedures, and block direct access to the cpp_session table to all users.
+
+This is the DDL of the SessionDB objects:
+
+### Session Management and Single Sign-On
+
+In order to maintain the concept of security session, all containers involved (LoginServer, CPPServer and Job) use a table stored in a PostgreSQL database SessionDB, which contains only one table specifically designed to manage a high number of concurrent inserts and updates, the table is named cpp_session, and CPPServer security layer includes the objetcs (functions and stored procedures) to manage it using a specific database role in order to provide secure access to this vital table.
+
+All our containers are stateless, they create the illusion of a servlet-like session manager -so to speak- by using this table stored outside the cluster, so all the nodes of the cluster can access it for different purposes, like creating a new session, updating a session or deleting expired sessions, it is up to the database administrator to create specific database roles to access the different objects, functions and procedures, and block direct access to the cpp_session table to all users.
+
+```
+CREATE UNLOGGED TABLE IF NOT EXISTS public.cpp_session
+(
+    session_id integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
+    user_login character varying(60) COLLATE pg_catalog."default" NOT NULL,
+    login_time timestamp without time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_access_time timestamp without time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ip_addr character varying(16) COLLATE pg_catalog."default",
+    mail character varying(60) COLLATE pg_catalog."default",
+    uuid character varying(40) COLLATE pg_catalog."default" NOT NULL DEFAULT gen_random_uuid(),
+    roles character varying(200) COLLATE pg_catalog."default",
+    CONSTRAINT cpp_session_pkey PRIMARY KEY (session_id)
+)
+
+WITH (
+    FILLFACTOR = 50
+)
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public.cpp_session
+    OWNER to postgres;
+
+CREATE UNIQUE INDEX IF NOT EXISTS cpp_session_idx_userlogin
+    ON public.cpp_session USING btree
+    (user_login COLLATE pg_catalog."default" ASC NULLS LAST)
+    TABLESPACE pg_default;
+```
+
+The PostgreSQL objects required by all our containers in order to manage the security session, these should be created in the public schema:
+
+```
+CREATE OR REPLACE FUNCTION public.cpp_get_timeout(
+	)
+    RETURNS integer
+    LANGUAGE 'plpgsql'
+    COST 100
+    VOLATILE PARALLEL UNSAFE
+AS $BODY$
+declare
+    q integer;
+begin
+    q := 5;
+    return q;
+end;
+$BODY$;
+
+ALTER FUNCTION public.cpp_get_timeout()
+    OWNER TO postgres;
+
+CREATE OR REPLACE FUNCTION public.cpp_session_count(
+	)
+    RETURNS TABLE(total integer) 
+    LANGUAGE 'sql'
+    COST 100
+    STABLE SECURITY DEFINER PARALLEL UNSAFE
+    ROWS 1
+
+AS $BODY$
+		select count(session_id) total from cpp_session;
+$BODY$;
+
+ALTER FUNCTION public.cpp_session_count()
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.cpp_session_count() TO cppserver;
+
+GRANT EXECUTE ON FUNCTION public.cpp_session_count() TO postgres;
+
+REVOKE ALL ON FUNCTION public.cpp_session_count() FROM PUBLIC;
+
+CREATE OR REPLACE FUNCTION public.cpp_session_create(
+	_userid character varying,
+	_mail character varying,
+	_ip_addr character varying,
+	_roles character varying)
+    RETURNS TABLE(new_id integer, uuid character varying) 
+    LANGUAGE 'sql'
+    COST 100
+    VOLATILE SECURITY DEFINER PARALLEL UNSAFE
+    ROWS 1
+
+AS $BODY$
+		delete from cpp_session where user_login = _userid;
+		INSERT INTO cpp_session
+		(
+			user_login,
+			mail,
+			ip_addr,
+			roles
+		)
+		VALUES
+		(
+			_userid,
+			_mail,
+			_ip_addr,
+			_roles
+		) returning session_id, uuid;
+$BODY$;
+
+ALTER FUNCTION public.cpp_session_create(character varying, character varying, character varying, character varying)
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.cpp_session_create(character varying, character varying, character varying, character varying) TO cppserver;
+
+GRANT EXECUTE ON FUNCTION public.cpp_session_create(character varying, character varying, character varying, character varying) TO postgres;
+
+REVOKE ALL ON FUNCTION public.cpp_session_create(character varying, character varying, character varying, character varying) FROM PUBLIC;
+
+
+CREATE OR REPLACE FUNCTION public.cpp_session_update(
+	_sessionid integer,
+	_uuid character varying)
+    RETURNS TABLE(user_login character varying, mail character varying, roles character varying) 
+    LANGUAGE 'sql'
+    COST 100
+    VOLATILE SECURITY DEFINER PARALLEL UNSAFE
+    ROWS 1
+
+AS $BODY$
+		delete from cpp_session where session_id = _sessionid 
+		and Extract(minute from current_timestamp - last_access_time) > cpp_get_timeout()
+		and uuid = _uuid;
+
+		update cpp_session
+		set last_access_time = CURRENT_TIMESTAMP
+		where session_id = _sessionid and uuid = _uuid;
+	
+		SELECT user_login, mail, roles FROM cpp_session where session_id = _sessionid and uuid = _uuid;
+$BODY$;
+
+ALTER FUNCTION public.cpp_session_update(integer, character varying)
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.cpp_session_update(integer, character varying) TO cppserver;
+
+GRANT EXECUTE ON FUNCTION public.cpp_session_update(integer, character varying) TO postgres;
+
+REVOKE ALL ON FUNCTION public.cpp_session_update(integer, character varying) FROM PUBLIC;
+
+CREATE OR REPLACE PROCEDURE public.cpp_session_delete(
+	IN _sessionid integer)
+LANGUAGE 'sql'
+    SECURITY DEFINER 
+AS $BODY$
+		delete from cpp_session where session_id = _sessionid;
+$BODY$;
+ALTER PROCEDURE public.cpp_session_delete(integer)
+    OWNER TO postgres;
+
+GRANT EXECUTE ON PROCEDURE public.cpp_session_delete(integer) TO cppserver;
+
+GRANT EXECUTE ON PROCEDURE public.cpp_session_delete(integer) TO postgres;
+
+REVOKE ALL ON PROCEDURE public.cpp_session_delete(integer) FROM PUBLIC;
+
+CREATE OR REPLACE PROCEDURE public.cpp_session_timeout(
+	)
+LANGUAGE 'sql'
+    SECURITY DEFINER 
+AS $BODY$
+	delete from cpp_session 
+	where Extract(minute from current_timestamp - last_access_time) > cpp_get_timeout()
+$BODY$;
+ALTER PROCEDURE public.cpp_session_timeout()
+    OWNER TO postgres;
+
+GRANT EXECUTE ON PROCEDURE public.cpp_session_timeout() TO cppserver;
+
+GRANT EXECUTE ON PROCEDURE public.cpp_session_timeout() TO postgres;
+
+REVOKE ALL ON PROCEDURE public.cpp_session_timeout() FROM PUBLIC;
+
+```
