@@ -1,23 +1,27 @@
 # CPPServer Security Model
 
-To invoke a microservice, which is basically sending a GET/POST request to CPPServer, the client must provide a session ID cookie with the name CPPSESSIONID, the value of this cookie has to be obtained via a previous successful login using a customer provided authentication backend. CPPServer includes a separate component, LoginServer, which serves the purpose of exposing the microservices for authentication (via DBMS or LDAP), and upon successful login, a valid session record will be created in the SessionDB and the client will receive a response with the corresponding session ID, which must be sent afterwwards on every request to execute a microservice, using the cookie mentioned before, this way the session can be validated, the current user's basic information (login name, email, roles) can be retrieved in microseconds and the security enforcement layer inside CPPServer can be applied before granting execution of the request. This is the basic process of authentication and authorization.
+To invoke a microservice, which is basically sending a GET/POST request to CPPServer, the client must provide a session ID cookie with the name CPPSESSIONID, the value of this cookie has to be obtained via a previous successful login using a customer provided authentication backend. CPPServer includes a separate component, LoginServer, which serves the purpose of exposing the microservices for authentication (via DBMS or LDAP), and upon a successful login, a valid session record will be created in the SessionDB and the client will receive a response with the corresponding session ID (set-cookie HTTP header), which must be sent afterwwards by the client on every request to execute a microservice, using the cookie mentioned before, this way the session can be validated, the current user's basic information (login name, email, roles) can be retrieved in microseconds and the security enforcement layer inside CPPServer can be applied before granting execution of the request. This is the basic process of authentication and authorization.
 There is a third component, CPPJob, a scheduled task or job, that runs every N minutes and deletes expired sessions according to a pre-configured timeout.
 
 ![security-model](https://github.com/cppservergit/cppserver-docs/assets/126841556/763e45a1-d217-4524-be90-75234a6ea6e1)
 
-Regardeless of the database used for the business, the session database requires PostgreSQL, it's only a single table stored in the public schema, designed for the specific purpose of making very fast inserts and updates of single rows, since this will happen a lot during high concurrency periods. The database does not demand lots of resources, it can be easily provisioned using a VM with 4gb of RAM and docker, the QuickStart tutorial shows how easy it is to automate the whole installation of the software and the creation of the database, in minutes.
+Regardeless of the database used for the business, the session database requires PostgreSQL, it's only a single table stored in the public schema, designed for the specific purpose of making very fast inserts and updates of single rows, since this will happen a lot during high concurrency periods. The database does not demand lots of resources, it can be easily provisioned using a VM with 4gb of RAM and docker, the [QuickStart tutorial](https://github.com/cppservergit/cppserver-docs/blob/main/quickstart.md) shows how easy it is to automate the whole installation of the software and the creation of the database, in minutes.
 
-All our containers are stateless, they create the illusion of a servlet-like session manager -so to speak- by using this table stored outside the cluster, so all the nodes of the cluster can access it for different purposes, like creating a new session, updating a session or deleting expired sessions, it is up to the database administrator to create specific database roles to access the different objects, functions and procedures, and block direct access to the cpp_session table to all users.
+All our containers/components are stateless, CPPServer creates the illusion of a servlet-like session manager -so to speak- by using this SessionDB's table, so all running instances of CPPServer, LoginServer and CPPJob can access it for different purposes, like creating a new session, updating a session or deleting expired sessions. CPPServer does not require sticky-sessions on the Load Balancer, which is a lot more friendly for clusters, it was in fact designed to be executed as a container on orchestation platform like Kubernetes, it promotes scalability by being stateless, a client can "hit" any instance/pod of CPPServer on any node of the cluster, and the security session will be there, because the session information is retrieved on-the-fly on every request, in a very fast operation (the network can affect this).
+
+## Session Management and Single Sign-On
+
+As mentioned before, in order to maintain the concept of cluster-wide security session, all containers/components involved (LoginServer, CPPServer and CPPJob) use a single table stored in a PostgreSQL database named SessionDB, specifically designed to manage a high number of concurrent inserts and updates, the table is named cpp_session, and CPPServer SQL security script includes the objetcs (functions and stored procedures) to manage it using a specific database role "cppserver" in order to provide secure/restricted access to this vital table, only CPPServer should use this database role "cppserver".
+
+It is up to the database administrator to create a specific database role "cppserver" to access the different objects (functions and procedures), and block direct access to the cpp_session table to all users.
+This SessionDB database is a potential attack surface, it must be protected, otherwise an attacker with enough DB privileges and knowledge of the table structure could insert a fake session record and somehow transmit the information to an attacker using a custom HTTPS client that could send a cookie which would be validated by the security layer of CPPServer, as if a previous valid login had occured.
+
+All our containers are stateless, they create the illusion of a servlet-like session manager -so to speak- by using this table stored outside the cluster, so all the nodes of the cluster can access it for different purposes, like creating a new session, updating a session or deleting expired sessions.
 
 This is the DDL of the SessionDB objects:
-
-### Session Management and Single Sign-On
-
-In order to maintain the concept of security session, all containers involved (LoginServer, CPPServer and Job) use a table stored in a PostgreSQL database SessionDB, which contains only one table specifically designed to manage a high number of concurrent inserts and updates, the table is named cpp_session, and CPPServer security layer includes the objetcs (functions and stored procedures) to manage it using a specific database role in order to provide secure access to this vital table.
-
-All our containers are stateless, they create the illusion of a servlet-like session manager -so to speak- by using this table stored outside the cluster, so all the nodes of the cluster can access it for different purposes, like creating a new session, updating a session or deleting expired sessions, it is up to the database administrator to create specific database roles to access the different objects, functions and procedures, and block direct access to the cpp_session table to all users.
-
 ```
+CREATE ROLE cppserver with LOGIN NOSUPERUSER password 'basica';
+
 CREATE UNLOGGED TABLE IF NOT EXISTS public.cpp_session
 (
     session_id integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
@@ -43,11 +47,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS cpp_session_idx_userlogin
     ON public.cpp_session USING btree
     (user_login COLLATE pg_catalog."default" ASC NULLS LAST)
     TABLESPACE pg_default;
-```
 
-The PostgreSQL objects required by all our containers in order to manage the security session, these should be created in the public schema:
-
-```
 CREATE OR REPLACE FUNCTION public.cpp_get_timeout(
 	)
     RETURNS integer
@@ -188,5 +188,5 @@ GRANT EXECUTE ON PROCEDURE public.cpp_session_timeout() TO cppserver;
 GRANT EXECUTE ON PROCEDURE public.cpp_session_timeout() TO postgres;
 
 REVOKE ALL ON PROCEDURE public.cpp_session_timeout() FROM PUBLIC;
-
 ```
+
