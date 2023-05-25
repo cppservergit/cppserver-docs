@@ -211,7 +211,7 @@ Before getting into the details of the security process, let's review the genera
 
 ![api-definition](https://github.com/cppservergit/cppserver-docs/assets/126841556/b32159dd-01ca-4c3e-bd13-de0d0c82c6e0)
 
-The CPPServer process reads on startup a configuration file /etc/cppserver/config.json where the microservices definitions are stored, it will parse this file once and then will start listening to requests, that should map some of the services defined in config.json, in this file, each service will define its properties, like path, C++ function to execute, SQL to execute and also some security constraints, or lack of security if required! This config.json file is central to the operation of CPPServer, here is where the no-code, declarative part of the CPPServer approach resides.
+The CPPServer process reads on startup a configuration file /etc/cppserver/config.json where the microservices definitions are stored, it will parse this file once and then it will start listening to requests that should map some of the services defined in config.json, in this file, each service will define its properties, like path, C++ function to execute, SQL to execute and also some security constraints, or lack of security if required! This config.json file is central to the operation of CPPServer, here is where the no-code declarative part of the CPPServer approach resides.
 
 So let´s review what happens when a request arrives.
 
@@ -220,4 +220,97 @@ So let´s review what happens when a request arrives.
 3. If the microservice is not secured (it has the "secure" attribute set to 0 in config.json) then the microservice will be executed even if there is no valid security session associated to the request, restrictions on authorized roles are ignored if the microservice is not secure, by default all microservices are secure unless explicitly defined in config.json, and a warning when starting the CPPServer process will be printed to the logs.
 4. If the request passes the authentication test but the microservice has a roles restriction defined in config.json (authorized roles that can execute the microservice) then it will compare the roles associated to the security session with the list of authorized roles, a nano-seconds operation, and if the authorization test is not passed, a JSON response with status "INVALID" will be returned, and the validation fields in the response will contain information to let the client know without ambiguity that the request was rejected for lack of permissions. For this case an HTTP code 200 is returned, please refere to the [CPPServer JSON spec](https://github.com/cppservergit/cppserver-docs/blob/main/json_response_spec.pdf) for detailed information about how CPPServer responds to different situations. In general, CPPServer will always return 200, even on validation tests and errors, unless the authentication test fails, in which case it does return 401.
 5. If the request passes the authentication and authorization tests, then the microservice will be executed.
+
+![security-workflow](https://github.com/cppservergit/cppserver-docs/assets/126841556/4dc6dffa-4d4c-41aa-961a-0d900d9cfc8f)
+
+Please note that after the security tests have been verified, there are some validations of parameters that may fail, if this is the case the service won't be executed, but these validations are not security related, that's why these are not depicted on the diagram.
+
+## The login process
+
+CPPServer has built-in login capabilities, but only for SQL databases (users/passwords stored in a database table), in general, it is recommended to disable login from CPPServer and leave that task to LoginServer container, this component has the same SQL login capabilities, but it also includes a configurable LDAP login. There is a login adapter to use with a PostgreSQL database, that requires the existence of a function called cpp_dblogin and stored in the public schema, LoginServer depends on this PGSQL function object, what happens inside is not relevant, except that the function must return a certain resultset with some specific columns and be certain to verify login credentials without ambiguities, this SQL function acts as an authentication backend, and makes LoginServer independent of the implementation details of an SQL-based login mechanism. The SQL login adapter will use this function, thus this piece of C++ code is indepentent of the security model implemented in the database.
+
+![Pod deployment model](https://github.com/cppservergit/cppserver-docs/assets/126841556/a8fe208f-6faa-422c-bce5-45e7872fc1f3)
+
+For the QuickStart tutorial we provide a DemoDB that contains the objects of SessionDB, a security scheme with some tables that represent a legacy users' security model, and the business data tables, all in a single DB for simplicity's sake, but we have to define three different database connections as environment variables (Kubernetes secrets) in any case: CPP_SESSIONDB, CPP_LOGINDB and CPP_DB1 (the business database, you can define DB2...DB10).
+
+This is the interface definition for the login pgsql function, it must be called cpp_dblogin and it must be stored in the public schema:
+
+```
+CREATE OR REPLACE FUNCTION public.cpp_dblogin(
+	_userlogin character varying,
+	_userpassword character varying)
+    RETURNS TABLE(email character varying, displayname character varying, rolenames character varying) 
+    LANGUAGE 'plpgsql'
+```
+
+If the login was successful a resultset of 1 row is expected with 3 columns, the "rolenames" column must contain the user's roles separated by comma ",".
+An empty resultset is interpreted as a failed login. If the login succeeds then this LoginServer will create a security session for the user by inserting a row in the public.cpp_session table in the session database using another database function for this purpose which is part of the CPPServer database support layer for session management, as explained before.
+
+Here is an example of the cpp_dblogin SQL function using our security schema from DemoDB:
+```
+CREATE OR REPLACE FUNCTION public.cpp_dblogin(
+	_userlogin character varying,
+	_userpassword character varying)
+    RETURNS TABLE(email character varying, displayname character varying, rolenames character varying) 
+    LANGUAGE 'plpgsql'
+    ROWS 1
+
+AS $BODY$
+declare q varchar;
+declare roles varchar;
+BEGIN
+	select STRING_AGG(distinct r.rolename, ', ') into roles from security.s_user_role ur inner join security.s_user u
+	on u.user_id = ur.user_id
+	inner join security.s_role r on r.role_id = ur.role_id
+	where u.userlogin = _userlogin;
+
+	q := _userlogin || ':' || _userpassword;
+        q := ENCODE(decode(MD5(q), 'hex'), 'base64');
+	RETURN QUERY select x.email, CAST(x.fname || ' ' || x.lname as varchar) displayname, roles as rolenames from security.s_user x where
+	x.userlogin = _userlogin and
+	x.passwd = q
+	and x.enabled = 1;
+	RETURN;
+END;
+$BODY$;
+
+ALTER FUNCTION public.cpp_dblogin(character varying, character varying)
+    OWNER TO postgres;
+
+GRANT EXECUTE ON FUNCTION public.cpp_dblogin(character varying, character varying) TO cppserver;
+
+GRANT EXECUTE ON FUNCTION public.cpp_dblogin(character varying, character varying) TO postgres;
+
+REVOKE ALL ON FUNCTION public.cpp_dblogin(character varying, character varying) FROM PUBLIC;
+
+```
+
+LoginServer can also use an LDAP server if properly configured in its environment variables, it does use the standard C API for LDAP to connect to OpenLDAP or ActiveDirectory.
+This is a fragment of the loginserver.yaml file used to deploy it on Kubernetes, here you can see the environment variables relevant to the security tasks, including the LDAP configuration.
+```
+          - name: CPP_LDAP_URL
+            value: "ldap://ldap.mshome.net:1389/"
+          - name: CPP_LDAP_USER_DN
+            value: "cn={userid},ou=users,dc=example,dc=org"
+          - name: CPP_LDAP_USER_BASE
+            value: "ou=users,dc=example,dc=org"
+          - name: CPP_LDAP_USERGROUPS_BASE
+            value: "ou=users,dc=example,dc=org"
+          - name: CPP_LDAP_USER_FILTER
+            value: "(userid={userid})"
+          - name: CPP_LDAP_USERGROUPS_FILTER
+            value: "(member={dn})"
+          - name: CPP_SESSIONDB
+            valueFrom:
+              secretKeyRef:
+                name: cpp-secret-sessiondb
+                key: connstr
+                optional: false
+          - name: CPP_LOGINDB
+            valueFrom:
+              secretKeyRef:
+                name: cpp-secret-logindb
+                key: connstr
+                optional: false
+```
 
