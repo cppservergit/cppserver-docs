@@ -4,11 +4,15 @@ CPPServer is a minimal (~300K) http server whose sole purpose is to serve GET/PO
 
 ![basic-workflow](https://github.com/cppservergit/cppserver-docs/assets/126841556/f774bbb3-0d22-4322-85bb-3ff340ecf8a0)
 
+## Dependencies
+
 It was written in _Modern_ C++, compiled to optimized native code, no memory leaks, depends on PostgreSQL native client API (libpq5) and a JSON configuration file (/etc/cppserver/config.json), designed to be run as a container on Kubernetes, from Laptops to the Cloud, or as a native Linux service, it is in fact, a native Linux application, tied to the EPOLL API, it's an async, non-blocking, event-based socket server, it can serve thousands of concurrent connections with only one thread, no [c10K connection problem](https://en.wikipedia.org/wiki/C10k_problem) here.
 
 ![basic-dependencies](https://github.com/cppservergit/cppserver-docs/assets/126841556/cfa3cbc6-190c-4baf-859c-f54985efe278)
 
 Thus CPPServer can be defined as a high-peformance, compact, no-code JSON API engine, you don't have to write C++ to create an HTTP API that retuns JSON from SQL queries, it's already written inside CPPServer, you only have to configure your API in config.json and let CPPServer parse this file and serve the requests. Security, observability, tracing, audit logs, native access to the database, it's all included in this program. CPPServer is [open-source](https://github.com/cppservergit/cppserver-pgsql), so it's up to you to add/change features in the code.
+
+It's compiled with GCC 12.1 on Ubuntu 22.04 using C++20 standard.
 
 ## Internal structure
 
@@ -18,9 +22,9 @@ The main module starts the server and the pool of worker threads, there is only 
 
 We keep locking to a minimum, only to coordinate access to the message queue (std::queue) between the Producer and the Consumers, the rest of the program is lock-free, each worker thread has its own database connection, there is no need of connection pooling this way, and the database component is able to recover from an invalid connection in a way transparent to the client, although detailed logs will be recorded when this happens.
 
-The lock-free, controversial part of this program is a Map that contains the socket's FD associated with a data structure that contains the HTTP request (represented as fields, headers, body, etc) and the response buffer, so when a connection is established, a new entry in this map will be created if necessary (it may already exist, in that case no creation overhead), all this happens in the main thread and no other thread will be touching that particular pair of FD and Request/Response object, the FD, which is passed in all EPOLL events is the index to retrieve this high-level Request object, and it is passed (as a reference) to the message queue to be consumed by the worker threads. The thing is, there won't be more than a single thread reading or writing on the same Request/Response object at the same time, there is no data race, but if you use compiler instrumentation or valgrind to test for thread sanity, a lot of warnings will be issued, false positives, because the way the program is written, there is no chance for 2 or more threads to perform reads or writes at the same time on the same request object, therefore, no data races in the strict sense, this lock-free management of these requests objects yields high performance, if scoped locks were applied, there would be no warnings on thread sanity, but performance would suffer under high concurrency, A LOT, it was tested and verified.
+The lock-free, controversial part of this program is a Map that contains the socket's FD associated with a data structure that contains the HTTP request (represented as fields, headers, body, etc) and the response buffer, so when a connection is established, a new entry in this map will be created if necessary (it may already exist, in that case no creation overhead), all this happens in the main thread and no other thread will be touching that particular pair of FD and Request/Response object, the FD, which is passed in all EPOLL events is the index to retrieve this high-level Request object, and it is passed (as a reference) to the message queue to be consumed by the worker threads. The thing is, there won't be more than a single thread reading or writing on the same Request/Response object at the same time, there is no data race, but if you use compiler instrumentation or valgrind to test for thread sanity, a lot of warnings will be issued, false positives, because these tools detect that different threads did reads/writes on the same objects without locks. Because the way the program is written, there is no chance for 2 or more threads to perform reads or writes at the same time on the same request object, therefore, no data races in the strict sense, this lock-free management of these requests objects yields high performance, if scoped locks were applied, there would be no warnings on thread sanity, but performance would suffer under high concurrency, A LOT, it was tested and verified.
 
-So, controversial as it may be the use of this Map (std::map) and the passing of the objects's references avoiding a copy to the consumers, it suits the somewhat particular or tricky epoll model, and it was coded in such a way that only one thread can operate at a given time of the request/response object. There was a sort of natural fit between the use of EPOLL events passing the socket's FD, the Map that associated the FD with a request/response object, and the way non-blocking sockets operate on Linux, and all of this avoiding the data race despite the warnings. The Map is only used by the main thread, there is no need of locks for its operation.
+So, controversial as it may be the use of this Map (std::map) and the passing of the objects's references avoiding a copy to the consumers, it suits the somewhat particular or tricky epoll model, and it was coded in such a way that only one thread can operate at a given time on the same request/response object. There was a sort of natural fit between the use of EPOLL events passing the socket's FD, the Map that associated the FD with a request/response object, and the way non-blocking sockets operate on Linux, and all of this avoiding the data race despite the warnings. The Map is only used by the main thread, there is no need of locks for its operation.
 
 Only the main thread, the one that controls the EPOLL event loop, will accept connections and perform read/write operations on sockets, the worker threads only use the assembled request to execute the service using the inputs and produce a JSON output, when the output is ready, the main thread will be notified by EPOLL to write to the socket, all socket operations are non-blocking. The code follow Linux AAPI guidance in order to minimize system calls, for instance, when accepting new connections, a single call `accept4()` accepts and sets the new socket in non-blocking mode:
 
@@ -58,7 +62,7 @@ Only the main thread, the one that controls the EPOLL event loop, will accept co
 			}
 ```
 
-When a "read" event arrives, the main thread reads data from the socket while available, assembling the request in parts (fields, headers, etc), when the request is complete the task is dispatched to any of the worker threads, using a queue to store it, the task contains the epoll_fd, the socket FD, and a reference to the specific request object associated with this socket's FD, this is the async part, the control returns inmediately to the main thread while some worker thread is processing the service using the microservice engine module (security checks, database I/O, response JSON assembly, error handling, etc). The "task producer" is shown at the end of the code below:
+When a "read" event arrives, the main thread reads data from the socket while available, assembling the request in parts (fields, headers, etc), when the request is complete the task is dispatched to any of the worker threads, using a queue to store it, the task contains the epoll_fd, the socket FD, and a reference to the specific request object associated with this socket's FD, this is the async part, the control returns inmediately to the main thread while some worker thread is processing in the background the service using the microservice engine module msp.cpp (security checks, database I/O, response JSON assembly, error handling, etc). The "task producer" is shown at the end of the code below:
 
 ```
 				int fd {events[i].data.fd};
@@ -94,3 +98,58 @@ When a "read" event arrives, the main thread reads data from the socket while av
 ```
 
 We avoid by all means calling `read()` or `write()` if there is no data available/socket ready, it's one fundamental technique when using non-blocking sockets with epoll, wait for the proper events and signals, don't call the system if it's not 100% necessary.
+
+This is the function call graph for main.cpp which is the module that starts the process and controls the epoll loop:
+
+![main-call-graph](https://github.com/cppservergit/cppserver-docs/assets/126841556/7d0668c8-81a1-4407-a2cf-35af5216cae7)
+
+## Signal handling
+
+A program that is going to run as a container or service must respond to STOP/KILL signals in order to terminate gracefully, freeing all resources, in the case of CPPServer, following C++ [RAII](https://en.cppreference.com/w/cpp/language/raii) guidelines, CPPServer guarantees that all resources are released, threads stopped, database connections closed, etc.
+
+```
+inline int get_signalfd() noexcept 
+{
+	signal(SIGPIPE, SIG_IGN);
+	sigset_t sigset;
+	sigemptyset(&sigset);
+	sigaddset(&sigset, SIGINT);
+	sigaddset(&sigset, SIGTERM);
+	sigaddset(&sigset, SIGQUIT);
+	sigprocmask(SIG_BLOCK, &sigset, NULL);
+	int sfd { signalfd(-1, &sigset, 0) };
+	return sfd;
+}
+```
+
+To achieve RAII, core C++ guidelines must be followed, but also important, OS signals must be properly intercepted too, CPPServer uses Linux-specific APIs for this, and the resulting Signal FD (file descriptor) is incorporated into the _objects of interest_ of EPOLL, this way we can be notified by EPOLL events when a STOP/KILL signal was sent to the process.
+
+```
+	epoll_event event_signal;
+	event_signal.data.fd = m_signal;
+	event_signal.events = EPOLLIN;
+	epoll_ctl(epoll_fd, EPOLL_CTL_ADD, m_signal, &event_signal);
+```
+
+Handling the STOP signal with EPOLL:
+```
+			else if (m_signal == events[i].data.fd) //shutdown
+			{
+				logger::log("signal", "info", "stop signal received for epoll FD: " + std::to_string(epoll_fd) + " SFD: " + std::to_string(m_signal));
+				exit_loop = true;
+				break;
+			}
+```
+
+This will break the EPOLL loop, close server sockets and trigger the order for all threads to stop and release their resources, with some very _Modern C++_ code.
+```
+	//shutdown workers
+	for (auto s: stops) {
+		s.request_stop();
+		{
+			std::scoped_lock lock {m_mutex};
+			m_cond.notify_all();
+		}
+	}
+```
+
