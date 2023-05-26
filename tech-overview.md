@@ -155,3 +155,11 @@ This will break the EPOLL loop, close server sockets and trigger the order for a
 	}
 ```
 
+## Modular organization
+
+CPPServer uses a classic C-style module organization for its translation units, every module declares its own namespace to enclose all elements (variables, functions, etc), a .H file to declare the interface and a corresponding .CPP file containing the implementation of the interface, only the elements declared in the interface file will be available to the clients of that module, whatever is not declared in the interface, won't be visible from the implementation module. This translation units are compiled separately, and when using a Makefile, only what has been changed needs to be recompiled (and any targets that depend on it). No header-only libraries are used, except for the JSON parser, which is a 3rd party open-source component. This helps make the compilation process simple and faster, -O3 and link-time-optimization are used for all the targets.
+
+![module-interface](https://github.com/cppservergit/cppserver-docs/assets/126841556/c21ae584-b78f-4868-b182-fbf101da22cb)
+
+C++20 modules are superior to the classic C-style H/CPP modules, but sadly in GCC-12.x the C++ 20 Modules implementation is not production-ready yet.
+
