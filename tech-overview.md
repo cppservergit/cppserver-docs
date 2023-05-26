@@ -103,9 +103,10 @@ This is the function call graph for main.cpp which is the module that starts the
 
 ![main-call-graph](https://github.com/cppservergit/cppserver-docs/assets/126841556/7d0668c8-81a1-4407-a2cf-35af5216cae7)
 
+
 ## Signal handling
 
-A program that is going to run as a container or service must respond to STOP/KILL signals in order to terminate gracefully, freeing all resources, in the case of CPPServer, following C++ [RAII](https://en.cppreference.com/w/cpp/language/raii) guidelines, CPPServer guarantees that all resources are released, threads stopped, database connections closed, etc.
+A program that is going to run as a container or service must respond to STOP signals in order to terminate gracefully, freeing all resources, in the case of CPPServer, following C++ [RAII](https://en.cppreference.com/w/cpp/language/raii) guidelines, CPPServer guarantees that all resources are released, threads stopped, database connections closed, etc.
 
 ```
 inline int get_signalfd() noexcept 
@@ -121,8 +122,9 @@ inline int get_signalfd() noexcept
 	return sfd;
 }
 ```
+__Note__: protection against SIGPIPE is also incorporated in the signal handler, which is very important for TCP/IP socket servers.
 
-To achieve RAII, core C++ guidelines must be followed, but also important, OS signals must be properly intercepted too, CPPServer uses Linux-specific APIs for this, and the resulting Signal FD (file descriptor) is incorporated into the _objects of interest_ of EPOLL, this way we can be notified by EPOLL events when a STOP/KILL signal was sent to the process.
+To achieve RAII, core C++ guidelines must be followed, but also important, OS signals must be properly intercepted too, CPPServer uses Linux-specific APIs for this (function shown above), and the resulting Signal FD (file descriptor) is incorporated into the _objects of interest_ of EPOLL, this way we can be notified by EPOLL events when a STOP signal was sent to the process.
 
 ```
 	epoll_event event_signal;
