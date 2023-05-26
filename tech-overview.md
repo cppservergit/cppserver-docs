@@ -92,3 +92,5 @@ When a "read" event arrives, the main thread reads data from the socket while av
 						}
 					}
 ```
+
+We avoid by all means calling `read()` or `write()` if there is no data available/socket ready, it's one fundamental technique when using non-blocking sockets with epoll, wait for the proper events and signals, don't call the system if it's not 100% necessary.
