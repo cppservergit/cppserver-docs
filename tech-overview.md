@@ -161,5 +161,21 @@ CPPServer uses a classic C-style module organization for its translation units, 
 
 ![module-interface](https://github.com/cppservergit/cppserver-docs/assets/126841556/c21ae584-b78f-4868-b182-fbf101da22cb)
 
-C++20 modules are superior to the classic C-style H/CPP modules, but sadly in GCC-12.x the C++ 20 Modules implementation is not production-ready yet.
+C++20 modules are superior to the classic C-style .H/.CPP modules, but sadly in GCC-12.x the C++ 20 Modules implementation is not production-ready yet.
+
+This is the modular structure of CPPServer:
+
+![module-structure](https://github.com/cppservergit/cppserver-docs/assets/126841556/ea5740c8-b056-412d-a487-ce0eb7235938)
+
+The client of a module only has access to the module's interface, implementation details can change and the client won't be affected, this is the case with the module sql.cpp, there is an implementation (default one) for PostgreSQL native API and another for ODBC, which is the native API for SQLServer. The client of this module (mse.cpp) does not get affected by the implementation sql.cpp, the code is clean, each module exposes its own namespace. Below is the implementation of a generic function that executes an SQL command that returns a resultset as a JSON array, whatever the implementation of sql:: is, this code remains the same.
+
+```
+	//returns a single resultset
+	void dbget(std::string& jsonBuffer, config::microService& ms) 
+	{
+		sql::get_json(ms.db, jsonBuffer, ms.reqParams.sql(ms.sql, t_user_info.userLogin));
+	}
+```
+
+
 
