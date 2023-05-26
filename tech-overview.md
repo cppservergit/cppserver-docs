@@ -22,4 +22,73 @@ The lock-free, controversial part of this program is a Map that contains the soc
 
 So, controversial as it may be the use of this Map (std::map) and the passing of the objects's references avoiding a copy to the consumers, it suits the somewhat particular or tricky epoll model, and it was coded in such a way that only one thread can operate at a given time of the request/response object. There was a sort of natural fit between the use of EPOLL events passing the socket's FD, the Map that associated the FD with a request/response object, and the way non-blocking sockets operate on Linux, and all of this avoiding the data race despite the warnings. The Map is only used by the main thread, there is no need of locks for its operation.
 
-Only the main thread, the one that controls the EPOLL event loop, will perform read/write operations on sockets, the worker threads only use the assembled request to execute the service using the inputs and produce a JSON output, when the output is ready, the main thread will be notified by EPOLL to write to the socket, all socket operations are non-blocking.
+Only the main thread, the one that controls the EPOLL event loop, will accept connections and perform read/write operations on sockets, the worker threads only use the assembled request to execute the service using the inputs and produce a JSON output, when the output is ready, the main thread will be notified by EPOLL to write to the socket, all socket operations are non-blocking. The code follow Linux AAPI guidance in order to minimize system calls, for instance, when accepting new connections, a single call `accept4()` accepts and sets the new socket in non-blocking mode:
+
+```
+ 		  else if (listen_fd == events[i].data.fd) // new connection.
+		  {
+				struct sockaddr addr;
+				socklen_t len;
+				len = sizeof addr;
+				int fd { accept4(listen_fd, &addr, &len, SOCK_NONBLOCK) };
+				if (fd == -1) {
+					logger::log("epoll", "error", "connection accept FAILED for epoll FD: " + std::to_string(epoll_fd) + " " + std::string(strerror(errno)));
+					continue;
+				}
+
+				int rcvbuf {131072}, sndbuf {262144};
+				setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof rcvbuf);
+				setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof sndbuf);
+				
+				if (!buffers.contains(fd))
+					 buffers.insert({fd, http::request()});
+				else {
+					 http::request& req = buffers[fd];
+					 if (!req.is_clear) {
+						logger::log("epoll", "warn", "invoking request.clear() on FD: " + std::to_string(fd) + " path: " + req.path);
+						req.clear();
+					 }
+				}
+								
+				mse::update_connections(1);
+				epoll_event event;
+				event.data.fd = fd;
+				event.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
+				epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &event);
+			}
+```
+
+When a "read" event arrives, the main thread reads data from the socket while available, assembling the request in parts (fields, headers, etc), when the request is complete the task is dispatched to any of the worker threads, using a queue to store it, the task contains the epoll_fd, the socket FD, and a reference to the specific request object associated with this socket's FD, this is the async part, the control returns inmediately to the main thread while some worker thread is processing the service using the microservice engine module (security checks, database I/O, response JSON assembly, error handling, etc). The "task producer" is shown at the end of the code below:
+
+```
+				int fd {events[i].data.fd};
+				http::request& req = buffers[fd];
+				if (events[i].events & EPOLLIN) {
+					bool run_task {false};
+					int count {0};
+					while ((count = read(fd, data, sizeof(data)))) {
+						if (count == -1 && errno == EAGAIN) {
+							break;
+						}
+						if (count > 0) {
+							if (read_request(fd, req, data, count)) {
+								run_task = true;
+								break;
+							}
+						}
+						else {
+							logger::log("epoll", "error", "read error FD: " + std::to_string(fd) + " " + std::string(strerror(errno)));
+							buffers[fd].clear();
+							break;
+						}
+					}
+					if (run_task) {
+						//producer
+						worker_params wp {epoll_fd, fd, req};
+						{
+							std::scoped_lock lock {m_mutex};
+							m_queue.push(wp);
+							m_cond.notify_all();
+						}
+					}
+```
