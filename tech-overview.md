@@ -193,6 +193,8 @@ The client of a module only has access to the module's interface, implementation
 |login|login::|Provides login service using PostgreSQL native API|
 |audit|audit::|Saves audit record, default implementation uses logger module|
 
+There is fair separation of concerns between these modules, which is good for design, because it helps isolate changes when necessary, let's say there is a bug parsing HTTP request headers, the fix would be isolated to httputils.cpp module implementation, from the build system perspective (Makefile) only this module would require recompilation, and its dependant targets if any.
+
 ## Memory management
 
 Great care was put in CPPServer's memory handling, starting with the use of __Modern C++__ abstractions that provide automatic resource management tanks to RAII, by avoiding the use of C-style low code whenever possible and absolutely not using dynamic allocation of memory with low level C++ functions.
@@ -249,7 +251,101 @@ We use a thread_local variable in the microservice engine module (mse.cpp) to ma
 The engine is thread_local, each worker thread has one, and the engine mantains its own string buffer for JSON responses, preallocated at 32K.
 With these design choices CPPServer has proven itself capable of processing successfully thousands (7000+) of real microservice requests per second, including the overhead of security and inputs checks, as well as database I/O, a balance between performance, code simplicity and stability was sought and to a certain extent it has been achieved in the current version.
 
+## Database I/O
 
+The generic functions that can be used for a JSON API reside in mse.cpp, these can be services or validators, all of them have the same interface and rely on the sql:: module to perform its work. These functions are invoked by the service_engine::run() function shown above in the previous section. 
+Here is an example of some of the most basic functions:
+```
+	//returns a single resultset
+	void dbget(std::string& jsonBuffer, config::microService& ms) 
+	{
+		sql::get_json(ms.db, jsonBuffer, ms.reqParams.sql(ms.sql, t_user_info.userLogin));
+	}
+
+	//returns multiple resultsets from a single query
+	void dbgetm(std::string& jsonBuffer, config::microService& ms) {
+		sql::get_json(ms.db, jsonBuffer, ms.reqParams.sql(ms.sql, t_user_info.userLogin), ms.varNames);
+	}
+
+	//execute data modification query (insert, update, delete) with no resultset returned
+	void dbexec(std::string& jsonBuffer, config::microService& ms) {
+
+		constexpr char STATUS_OK[] = "{\"status\": \"OK\"}";
+		constexpr char STATUS_ERROR[] = "{\"status\": \"ERROR\",\"description\" : \"System error\"}";
+
+		if (sql::exec_sql(ms.db, ms.reqParams.sql(ms.sql, t_user_info.userLogin)))
+			jsonBuffer.append(STATUS_OK);
+		else
+			jsonBuffer.append(STATUS_ERROR);
+	}
+```
+
+They receive the worker thread's JSON buffer to store the response, and a variable representing the microservice in question, this is a struct with several fields and functions that automate generating properly formatted SQL without risks of SQL injection attacks, the sql:: module takes care of the hard work, and will trigger an exception in there is a fatal error, that exception will be trapped by the function that wraps/coordinates all the tasks inside the mse:: module, microservice(), and in that case a JSON with the proper ERROR status will be returned, and detailed logs will be printed on the server using the logger:: module, which will use STDERR and/or LOKI (a very popular logs aggregator)
+
+The microservice data structure is central to this mechanism, when config.json is parsed, each entry (if valid) will be converted into a variable of this type:
+
+```
+	struct microService 
+	{
+		std::string db;
+		std::string sql;
+		bool secure {true};
+		requestParameters reqParams;
+		std::vector<std::string> varNames; //array names when returning multiple arrays
+		std::vector<std::string> roleNames; //authorized roles
+		struct validator {
+			std::string sql;
+			std::string id;
+			std::string description;
+		} validatorConfig;
+		std::string func_service;
+		std::string func_validator;
+		std::function<void(std::string& jsonResp, microService&)> serviceFunction;
+		std::function<void(std::string& jsonResp, microService&)> customValidator;
+		bool audit_enabled {false};
+		std::string audit_record;
+	};
+```
+
+A database I/O service will only be invoked if the security checks passed and the inputs checks also passed, otherwise there is no way the code engine will invoke them, that's the contract. The inputs check includes invoking a validator function if any was defined for the service in config.json, validator functions are very similar to service functions, except that these will add a JSON with INVALID status if the validation fails, these are the generic validation functions in the current version:
+
+```
+	//if the resultset is not empty then fail (jsonResp will contain something)
+	void db_nomatch(std::string &jsonResp, config::microService& ms) {
+
+		const std::string STATUS_ERROR = R"(
+		{
+			"status": "INVALID",
+			"validation": {
+				"id": "$id",
+				"description": "$description"
+			}
+		}
+		)";
+
+		if (sql::has_rows(ms.db, ms.reqParams.sql(ms.validatorConfig.sql)))
+			jsonResp = replaceParam( STATUS_ERROR, { "$id", "$description" }, { ms.validatorConfig.id, ms.validatorConfig.description } );
+
+	}
+
+	//if the resultset is empty then fail (jsonResp will contain something)
+	void db_match(std::string &jsonResp, config::microService& ms) {
+
+		const std::string STATUS_ERROR = R"(
+		{
+			"status": "INVALID",
+			"validation": {
+				"id": "$id",
+				"description": "$description"
+			}
+		}
+		)";
+
+		if (!sql::has_rows(ms.db, ms.reqParams.sql(ms.validatorConfig.sql)))
+			jsonResp = replaceParam( STATUS_ERROR, { "$id", "$description" }, { ms.validatorConfig.id, ms.validatorConfig.description } );
+
+	}
+```
 
 
 
