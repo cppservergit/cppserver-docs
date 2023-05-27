@@ -103,6 +103,45 @@ This is the function call graph for main.cpp which is the module that starts the
 
 ![main-call-graph](https://github.com/cppservergit/cppserver-docs/assets/126841556/7d0668c8-81a1-4407-a2cf-35af5216cae7)
 
+The consumer, that is the background thread that processes the task (database I/O mostly) is this function, placed at the bottom of the diagram shown above:
+
+```
+void consumer(std::stop_token tok) noexcept 
+{
+	//start microservice engine on this thread
+	mse::init();
+	
+	while(!tok.stop_requested())
+	{
+		//prepare lock
+		std::unique_lock lock{m_mutex}; 
+		//release lock, reaquire it if conditions met
+		m_cond.wait(lock, [&tok] { return (!m_queue.empty() || tok.stop_requested()); }); 
+		
+		//stop requested?
+		if (tok.stop_requested()) { lock.unlock(); break; }
+		
+		//get task
+		auto params = m_queue.front();
+		m_queue.pop();
+		lock.unlock();
+		
+		//---processing task (run microservice)
+		mse::http_server(params.fd, params.req);
+		
+		//request ready, set epoll fd for output
+		epoll_event event;
+		event.data.fd = params.fd;
+		event.events = EPOLLOUT | EPOLLET | EPOLLRDHUP;
+		epoll_ctl(params.epoll_fd, EPOLL_CTL_MOD, params.fd, &event);
+	}
+	
+	//ending task - free resources if necessary
+	logger::log("pool", "info", "stopping worker thread", true);
+}
+```
+
+This function sets the socket FD ready for writing (in EPOLL terms) after the task is completed, that's a crucial part, because it will make the Linux kernel to trigger events to EPOLL for this socket and the code for writing will be executed, thus CPPServer achieves an event-based, async and non-blocking request processing mechanism with a single thread backed by a pool of four (default, it's configurable) worker threads. Using EPOLL properly is a bit tricky, requires a very clearly organized state machine, but it is a very simple API at the same time, a design decision was made to call it directly from C++ and avoid the overhead and complexity of existing C++ network libraries, and considering this is a Linux-specific program, portability was not an issue.
 
 ## Signal handling
 
