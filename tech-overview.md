@@ -157,11 +157,11 @@ This will break the EPOLL loop, close server sockets and trigger the order for a
 
 ## Modular organization
 
-CPPServer uses a classic C-style module organization for its translation units, every module declares its own namespace to enclose all elements (variables, functions, etc), a .H file to declare the interface and a corresponding .CPP file containing the implementation of the interface, only the elements declared in the interface file will be available to the clients of that module, whatever is not declared in the interface, won't be visible from the implementation module. This translation units are compiled separately, and when using a Makefile, only what has been changed needs to be recompiled (and any targets that depend on it). No header-only libraries are used, except for the JSON parser, which is a 3rd party open-source component. This helps make the compilation process simple and faster, -O3 and link-time-optimization are used for all the targets.
+CPPServer uses a classic C-style module organization for its translation units, every module declares its own namespace to enclose all elements (variables, functions, etc), a  header (.H) file to declare the interface and a corresponding .CPP file containing the implementation of the interface, only the elements declared in the interface file will be available to the clients of that module, whatever is not declared in the interface, won't be visible from the implementation module. This translation units are compiled separately, and when using a Makefile, only what has been changed needs to be recompiled (and any targets that depend on it). No header-only libraries are used, except for the JSON parser, which is a 3rd party open-source component. This helps make the compilation process simple and faster, -O3 and link-time-optimization are used for all the targets.
 
 ![module-interface](https://github.com/cppservergit/cppserver-docs/assets/126841556/c21ae584-b78f-4868-b182-fbf101da22cb)
 
-C++20 modules are superior to the classic C-style .H/.CPP modules, but sadly in GCC-12.x the C++ 20 Modules implementation is not production-ready yet.
+[C++20 modules](https://en.cppreference.com/w/cpp/language/modules) are superior to the classic C-style .H/.CPP modules, but sadly in GCC-12.x the C++ 20 Modules implementation is not production-ready yet.
 
 This is the modular structure of CPPServer:
 
@@ -192,6 +192,65 @@ The client of a module only has access to the module's interface, implementation
 |session|session::|Provides functions for security session management using PostgreSQL native API|
 |login|login::|Provides login service using PostgreSQL native API|
 |audit|audit::|Saves audit record, default implementation uses logger module|
+
+## Memory management
+
+Great care was put in CPPServer's memory handling, starting with the use of __Modern C++__ abstractions that provide automatic resource management tanks to RAII, by avoiding the use of C-style low code whenever possible and absolutely not using dynamic allocation of memory with low level C++ functions.
+The present version has been verified a free of memory leaks using tools like valgrind and GCC instrumentation (-fsanitize), but it was also a design goal to avoid repeated allocation/destruction of objects, which in a server can occur at a high rate leading to memory fragmentation and also imposing lots of work on the standard C++ allocators, to achieve this we pass by reference when it is convenient, but we also pre-allocate main objects once, like a thread_local string to store JSON responses, each worker thread has its own thread-safe, memory-safe buffer to store the current response, no allocations will be made for each request, just one, for a server running 7x24 that means some huge savings in memory allocation tasks, the same happens with the request/response objects, the main thread maintains a map that associated a socket FD with the request/response object, this object gets passed by reference to the worker threads. The server can process millions of requests, but it won't be allocating the main buffers (json response, http request/response) for each request, just once.
+
+Each worker thread manages a copy of the service map (std::unordered_map), which is a representation of the parsed config.json file, this map contains pointers the the microservice functions and validator functions associated with each URI (service API), as defined in config.json, and when a request gets dispatched to a worker thread, it will lookup on this service map using the path/uri of the service requested, if found, the pointers are retrieved, the security checks and inputs validated and if everything is OK the database I/O function will be executed.
+
+![cppserver-configmap](https://github.com/cppservergit/cppserver-docs/assets/126841556/6ea35d75-3aea-419b-bda0-5813fe1a1314)
+
+We use a thread_local variable in the microservice engine module (mse.cpp) to make it thread-safe, memory-safe and fast all at the same time. This is the core of this module, the engine that runs a microservice or JSON API, so to speak:
+
+```
+	struct service_engine {
+	  public:
+		service_engine() {
+			m_json_buffer.reserve(32767);
+			m_service_map = config::get_config_map();
+			for (auto& m: m_service_map) 
+			{
+				m.second.serviceFunction = getFunctionPointer(m.second.func_service);
+				if (!m.second.func_validator.empty())
+					m.second.customValidator = getValidatorFunctionPointer(m.second.func_validator);
+			}
+		}
+
+		inline std::string& run(http::request& req) 
+		{
+			if (auto m = m_service_map.find( req.path ); m != m_service_map.end() ) {
+				if ( m->second.secure ) {
+					if ( !sessionUpdate() )
+						throw LoginRequiredException();
+				}
+				m_json_buffer.clear();
+				m_json_buffer.append( validateInputs( req.path, req.params, m->second ) );
+				if (m_json_buffer.empty() ) {
+					m->second.serviceFunction( m_json_buffer, m->second );
+					if ( m->second.audit_enabled )
+						audit::save(req.path, t_user_info.userLogin, req.remote_ip, m->second);
+				}
+				return m_json_buffer;
+			} else {
+				throw std::runtime_error("microservice path not found");
+			}
+		}
+
+	  private:
+		std::unordered_map<std::string, config::microService> m_service_map;
+		std::string m_json_buffer;
+		
+	}; 
+	thread_local service_engine t_service;
+```
+
+The engine is thread_local, each worker thread has one, and the engine mantains its own string buffer for JSON responses, preallocated at 32K.
+With these design choices CPPServer has proven itself capable of processing successfully thousands (7000+) of real microservice requests per second, including the overhead of security and inputs checks, as well as database I/O, a balance between performance, code simplicity and stability was sought and to a certain extent it has been achieved in the current version.
+
+
+
 
 
 
