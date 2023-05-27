@@ -177,5 +177,21 @@ The client of a module only has access to the module's interface, implementation
 	}
 ```
 
+### Modules inventory
+
+|Module|Namespace|Description|
+|-----------|-----------|-----------|
+|main||Main module, starts the server and controls EPOLL loop|
+|env|env::|Reads environment variables|
+|logger|logger::|prints log messages to stderr in JSON format for LOKI, also can push log record to LOKI if configured (optional)|
+|config|config::|Parse config.json, provides microservice and requestParameters structs|
+|httputils|http::|Provides abstractions for http request and response|
+|loki|loki::|Provides push API via plain http to LOKI server, optional use, may be removed in future versions|
+|mse|mse::|Microservice engine, provides the generic functions to execute different types of common microservices, plus the mechanism for invokation given the configuration|
+|sql|sql::|Encapsulates the PostgreSQL native API and builds JSON from resultsets when required, a version of this module for ODBC is also available|
+|session|session::|Provides functions for security session management using PostgreSQL native API|
+|login|login::|Provides login service using PostgreSQL native API|
+|audit|audit::|Saves audit record, default implementation uses logger module|
+
 
 
