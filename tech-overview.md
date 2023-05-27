@@ -64,7 +64,7 @@ Only the main thread, the one that controls the EPOLL event loop, will accept co
 			}
 ```
 
-### The Poducer
+### The Producer
 
 When a "read" event arrives, the main thread reads data from the socket while available, assembling the request in parts (fields, headers, etc), when the request is complete the task is dispatched to any of the worker threads, using a queue to store it, the task contains the epoll_fd, the socket FD, and a reference to the specific request object associated with this socket's FD, this is the async part, the control returns inmediately to the main thread while some worker thread is processing in the background the service using the microservice engine module msp.cpp (security checks, database I/O, response JSON assembly, error handling, etc). The "task producer" is shown at the end of the code below:
 
