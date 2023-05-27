@@ -26,6 +26,8 @@ The lock-free, controversial part of this program is a Map that contains the soc
 
 So, controversial as it may be the use of this Map (std::map) and the passing of the objects's references avoiding a copy to the consumers, it suits the somewhat particular or tricky epoll model, and it was coded in such a way that only one thread can operate at a given time on the same request/response object. There was a sort of natural fit between the use of EPOLL events passing the socket's FD, the Map that associated the FD with a request/response object, and the way non-blocking sockets operate on Linux, and all of this avoiding the data race despite the warnings. The Map is only used by the main thread, there is no need of locks for its operation.
 
+### Single-thread EPOLL manager
+
 Only the main thread, the one that controls the EPOLL event loop, will accept connections and perform read/write operations on sockets, the worker threads only use the assembled request to execute the service using the inputs and produce a JSON output, when the output is ready, the main thread will be notified by EPOLL to write to the socket, all socket operations are non-blocking. The code follow Linux AAPI guidance in order to minimize system calls, for instance, when accepting new connections, a single call `accept4()` accepts and sets the new socket in non-blocking mode:
 
 ```
@@ -61,6 +63,8 @@ Only the main thread, the one that controls the EPOLL event loop, will accept co
 				epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &event);
 			}
 ```
+
+### The Poducer
 
 When a "read" event arrives, the main thread reads data from the socket while available, assembling the request in parts (fields, headers, etc), when the request is complete the task is dispatched to any of the worker threads, using a queue to store it, the task contains the epoll_fd, the socket FD, and a reference to the specific request object associated with this socket's FD, this is the async part, the control returns inmediately to the main thread while some worker thread is processing in the background the service using the microservice engine module msp.cpp (security checks, database I/O, response JSON assembly, error handling, etc). The "task producer" is shown at the end of the code below:
 
@@ -102,6 +106,8 @@ We avoid by all means calling `read()` or `write()` if there is no data availabl
 This is the function call graph for main.cpp which is the module that starts the process and controls the epoll loop:
 
 ![main-call-graph](https://github.com/cppservergit/cppserver-docs/assets/126841556/7d0668c8-81a1-4407-a2cf-35af5216cae7)
+
+### The Consumer
 
 The consumer, that is the background thread that processes the task (database I/O mostly) is this function, placed at the bottom of the diagram shown above:
 
