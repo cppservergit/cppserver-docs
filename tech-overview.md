@@ -417,7 +417,7 @@ Relevant aspects of this JSON record:
 
 * The `db` attribute references an environment variable `CPP_DB1` that contains the connection string, it's an index to lookup an already established database connection using that connection string, you can target several databases from the same config.json.
 * The `sql` attribute is the SQL command to be executed, it may contain placeholders to replace pre-validated input values, the mechanism that performs that task already takes care of SQL injection and proper formatting.
-* The `function`, that the key part, it must match the catalog of service API functions contained in the module mse.cpp, using that string a pointer to the function will be retrieved.
+* The `function` attribute, that's the key part, it must match one of the service API functions contained in the module mse.cpp, using that string a pointer to the function will be retrieved.
 
-When the program starts, config.json gets parsed and every records is stored in a variable of type config::microservice (shown above in previous section) and stored in an unordered map, indexed by the path (uri) of the service.
-This map of microservice objects is the link between the request URI and the function that gets executed in mse.cpp. The are more aspects to highlight about config.json, but it has its own document, about service API definition, what is relevant here for this overview is to show the relation between the configuration and the execution of the code that does the database I/O.
+When the program starts, config.json gets parsed and every record is converted into a variable of type config::microservice (shown above in previous section) and stored in an unordered map, indexed by the path (uri) of the service.
+This map of microservice objects is the link between the request URI and the function that gets executed in mse.cpp. The are more aspects to highlight about config.json, but it has its own document for that purpose, what is relevant for this overview is to show the relation between the configuration and the execution of the code that does the database I/O. CPPServer uses std::function to invoke the service API function.
