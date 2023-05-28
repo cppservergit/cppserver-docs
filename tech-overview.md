@@ -1,4 +1,4 @@
-# CPPServer Technical Overview (draft - in progress)
+# CPPServer Technical Overview
 
 CPPServer is a minimal (~300K) http server whose sole purpose is to serve GET/POST requests that will in turn invoke functions to execute SQL queries and return JSON to the clients, which can be any HTTP client, including browsers, mobile apps, another server, etc. It was designed to be a no-code API engine, meaning that you can declare or configure your APIs using a JSON file, and CPPServer will parse this file on startup and serve the requests according to this configuration.
 
