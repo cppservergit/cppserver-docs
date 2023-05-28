@@ -421,3 +421,32 @@ Relevant aspects of this JSON record:
 
 When the program starts, config.json gets parsed and every record is converted into a variable of type config::microservice (shown above in previous section) and stored in an unordered map, indexed by the path (uri) of the service.
 This map of microservice objects is the link between the request URI and the function that gets executed in mse.cpp. The are more aspects to highlight about config.json, but it has its own document for that purpose, what is relevant for this overview is to show the relation between the configuration and the execution of the code that does the database I/O. CPPServer uses std::function to invoke the service API function.
+
+### Inventory of service API functions
+
+These are the utility functions that cover a wide variety of business cases, assuming there is a layer of stored procedures/functions in the target database that encapsulate the business logic, as is the case in many corporate SQL databases. There are also some functions for security, diagnostics, monitoring, health check and blobs support.
+
+|Function|Description|
+|--------|-----------|
+|dbget|Retrieves a single resultset as JSON|
+|dbgetm|Retrieves multiple resultsets as JSON|
+|dbexec|Executes a data modification query, returns JSON with status OK, don't expects a resultset|
+|login|Executes the cpp_dblogin SQL function, if resultset is not empty assumes successful login and creates a security session, uses login:: and session:: modules|
+|logout|Executes the cpp_session_delete SQL procedure, always returns JSON with status OK, uses session:: module|
+|downloadFile|retrieves a BLOB given its ID from /var/blobs and stores it in the response buffer, for this service the response is not JSON but a file attachment for the browser|
+|deleteFile|deletes a BLOB from /var/blobs given its ID and also the corresponding record in the database, returns JSON with status OK|
+|getSessionCount|Executes the cpp_session_count SQL function to retrieve a resultset with the number of active sessions, uses session:: module|
+|getServerInfo|Returns JSON with relevant metrics of CPPServer, for diagnostics and monitoring|
+|getMetrics|Returns the same as above plus getSessionCount() in Prometheus-compatible format for collecting metrics|
+|ping|Returns minimal JSON with status OK, it is the intended service to be called for health/liveness checks on Kubernetes or Cloud container services|
+|get_version|Returns JSON with POD name and CPPServer version and build date|
+
+__Validation functions__
+
+|Function|Description|
+|--------|-----------|
+|db_match|Fails if the resultset is empty, if data is not found for the given SQL then validation fails|
+|db_nomatch|Fails if the resultset is not empty, if data is found for the given SQL then validation fails|
+
+
+
