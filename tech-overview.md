@@ -448,5 +448,10 @@ __Validation functions__
 |db_match|Fails if the resultset is empty, if data is not found for the given SQL then validation fails|
 |db_nomatch|Fails if the resultset is not empty, if data is found for the given SQL then validation fails|
 
+## Basic request workflow
+
+CPPServer accepts GET/POST HTTP requests only, basically when a request arrives it will be checked for security, if the request is not secure (ie. /ms/login) this is skipped, otherwise the security validations are applied, and proper authentication and authorization will be verified, if security OK then inputs will be validated, are they required or optional? are they of the correct data type according to config.json rules? is there an additional validator defined for this service and it tested OK? if inputs validation OK then CPPServer will execute the microservice.
+
+![request-workflow](https://github.com/cppservergit/cppserver-docs/assets/126841556/22cfc9cc-f979-4b86-8bb7-1e0bfd4a89e8)
 
 
