@@ -88,6 +88,7 @@ CPPServer is vendor-agnostic, it was designed and built to run from Laptops to O
 * [Anatomy of a C++ microservice](https://github.com/cppservergit/cppserver-docs/blob/main/microservice-anatomy.pdf)
 * [JSON response structure specification](https://github.com/cppservergit/cppserver-docs/blob/main/json_response_spec.pdf)
 * [Security model](https://github.com/cppservergit/cppserver-docs/blob/main/security-model.md)
+* [Technical Overview](https://github.com/cppservergit/cppserver-docs/blob/main/tech-overview.md)
 
 ### Repos
 * [DockerHub repository](https://hub.docker.com/r/cppserver/pgsql)
