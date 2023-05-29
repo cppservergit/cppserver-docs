@@ -123,16 +123,17 @@ This service will retrieve two resultsets, customer information and the customer
 			"fields": [
 				{"name": "customerid", "type": "string", "required": "true"}
 			],
-			"audit": {"enabled": "false", "record": "Customer report: $customerid"}
+			"audit": {"enabled": "true", "record": "Customer report: $customerid"}
 		}
 ```
 
 * sql: we are using 2 SQL commands, one for the customer information and the other for the customer's orders, both will use the same search parameter `$customerid` which must be defined in the `"fields"` array
 * function: this time we use `dbgetm` which can execute multiple SQLs and retrieve a JSON array from each resultset, in contrats with `dbget` which works for a single resultset
 * tags: we need to define a name for each array representing the resultset, one for the cursomer and one for the orders
-* fields: will contain a definition for each input parameter, there is only one for this case, the customerid, which is string and is required, this imposes a mandatory test, the microservice won't be executed if the supplied parameter does not pass the test
+* fields: will contain a definition for each input parameter, there is only one for this case, the customerid, which is string and is required, this imposes a mandatory test, the microservice won't be executed if the supplied parameter does not pass the test, please note that a corresponding marker or placeholder for the SQL attribute will use the same parameter name preceded by the "$" sign, like `$customerid`
+* audit: the presence of this attribute is optional, if enabled it will print to the logger (current default implementation) the message specified in the `"reord"`attribute, which can contain the parameters just like in the `"sql"` attribute. This audit trace will contain the origin IP address, the user, the path of the request in addition to the record, the timestamp of the event is managed by the log subsystem (Kubernetes).
 
-The response, if you compare it with the example shown above, you will see that the data field now contains 2 subfields, customer and orders, because that's what we asked in the service definition ("tags" attribute).
+The response for this service:
 ```
 {
 	"status": "OK",
@@ -173,3 +174,6 @@ The response, if you compare it with the example shown above, you will see that 
 	}
 }
 ```
+
+If you compare it with the example shown above, you will see that the data field now contains 2 subfields, customer and orders, because that's what we asked in the service definition ("tags" attribute).
+
