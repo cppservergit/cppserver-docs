@@ -52,5 +52,14 @@ For these on-premise deployments we recommend and support [Canonical's MicroK8s 
 
 ### Single-node Cluster
 
-![single-node model api](https://github.com/cppservergit/cppserver-docs/assets/126841556/907689fc-c972-4d77-b92b-f6050bfcb7ed)
+![arch-1](https://github.com/cppservergit/cppserver-docs/assets/126841556/dc2062be-9f43-4273-b0c6-67d05e428c65)
+
+The most simple setup, suitable for local development but also for testing, depending on the hardware this setup can handle 10000+ concurrent users with a single pod, it can auto-scale to multiple pods, external resources like a static website can be managed in the local filesystem (Kubernetes hostPath storage) and all the Pods will have access to them via a volume mapping, these resources can be updated and refreshed on CPPServer for instant feedback on changes made to these files, which is very handy for frontend development. As for the backend, if config.json is managed as a configMap (instead of using the one stored in the image), then it can be updated without affecting the image, then a deployment rollout will refresh the Pods with the new configMap, in a few seconds, which makes the microservice building/testing cycle very agile.
+
+### High-availability cluster, single VM with LXD
+
+![arch2](https://github.com/cppservergit/cppserver-docs/assets/126841556/cba43be7-f1ea-47de-8236-c36f1ef9a010)
+
+Using LXD to partition a single VM or bare-metal into three native Linux containers (lighter than a full VM) you can setup a high-availability MicroK8s cluster, which requires a minimum of three nodes, you can add more nodes, as worker nodes or stand-by nodes, it dependes on the computing power available on the VM or baremetal machine you are using for the cluster. What's very interesting in this setup is that you can use a single machine to create a high-availability multi-node K8s cluster, similar to a Cloud setup. CPPServer Pods would auto-scale across the nodes, Kubernetes takes care of that and much more. The storage (for the static website) must be shared for this setup, this is transparent to CPPServer as long as the shared storage can be mapped using a Kubernetes volume.
+
 
