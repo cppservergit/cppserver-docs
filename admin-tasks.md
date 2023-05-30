@@ -269,6 +269,7 @@ Expected output:
 ```
 
 You've just created a C++ microservice without writing or compiling any C++ code, it's running at full machine-code speed thanks to the declarative facilities of CPPServer. You can exercise your skills checking the access logs of the Nginx Ingress to see how much time was spent processing this request.
+Please also check [How to create a microservice](https://github.com/cppservergit/cppserver-docs/blob/main/json-api-config.md) for a detailed explanation of all the configuration options in config.json.
 
 ## Updating the static website
 
