@@ -65,12 +65,19 @@ Check the [MicroK8s clustering guide](https://microk8s.io/docs/clustering) for m
 
 In order to balance the load between the Kubernetes cluster nodes, HAProxy load balancer will be installed as a native Linux service, on the same host machine, but it will be the only process visible from the external network, the cluster nodes are not visible to the external network, they are on a subnet inside the host machine, which is only visible to HAProxy, there is a natural security feature in this setup as a consequence of using LXD to partition the host machine.
 
-It's relevant to note that HAProxy can use HTTP or HTTPS to contact the Pods, considering the host is closed to the external network, plain HTTP can be used to enhance performance.
+It's relevant to note that HAProxy can use HTTP or HTTPS to contact the Ingress on each node, considering the host is closed to the external network, plain HTTP can be used for better performance.
 
 ### High-availability cluster, multiple VMs
 
 ![arch-3](https://github.com/cppservergit/cppserver-docs/assets/126841556/e3167d0e-e1bd-4712-befa-80bf89be2641)
 
 This is a variation of the last model, but more expensive in terms of computing power because it does use a separate VM for each cluster node and also for the external HAProxy (load balancer).
+
+### Single-node Cluster with replica
+
+![arch-4](https://github.com/cppservergit/cppserver-docs/assets/126841556/1a248c9b-7cfc-4112-9ba0-9c13df07e1b4)
+
+In this model, which is similar to the first one, there is no HA cluster on Kubernetes, nevertheless you can have several Pods running on the node and there is load balancing and self-healing at the Pod level.
+What is relevant on this model is that you can have an identical copy of the 1st node, and configure HAProxy as the load balancer with the 2nd node as a backup or stand-by, if the 1st node stops working, HAProxy will start using the 2nd node, it is a way to have high availability on-prem with a couple of simple node setups. External resources like a static webstie must be placed in shared storage visible to both nodes. Each node is a single-node cluster, there is no relation between them, each one has its own control plane.
 
 
