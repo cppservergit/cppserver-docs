@@ -222,7 +222,11 @@ Usually a microservice that does not return one or more resultsets, will return 
 {"status": "OK"}
 ```
 
-Regarding the validator, there is another function called `db_match` which validates the opposite, if the SQL does not return rows then fail, with these two validators `db_nomatch` and `db_match` and SQL many common cases can be tested, as told before, all SQL attributes, for services and validators, should rely on invoking SQL functions and procedures, and the database role (user credential) used by CPPServer should only have access to execute a set of SQL functions and procedures, for security reasons and performance too, especially in the case of DBMS systems like SQL Server that pre-compile these objects.
+Regarding the validator, there is another function called `db_match` which validates the opposite, if the SQL does not return rows then fail, with these two validators `db_nomatch` and `db_match` and the proper SQL commands many common cases can be tested. 
+
+As told before, all SQL attributes, for services and validators, should rely on invoking SQL functions and procedures, and the database role (user credential) used by CPPServer should only have access to execute a set of SQL functions and procedures, for security reasons and performance too, especially in the case of DBMS systems like SQL Server that pre-compile these objects.
+
+![datbase-role](https://github.com/cppservergit/cppserver-docs/assets/126841556/77b10fb3-c869-4758-9eae-229d5965fb2e)
 
 ### Examples from Demo App
 
