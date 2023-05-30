@@ -56,11 +56,11 @@ This is is a minimal config.json file, with security and diagnostic services onl
 
 The file represents an array of JSON objects, each object represents a microservice, that is, a resource accessed via HTTP with GET/POST verb and returns a JSON response. This particular example shown above contains only the base services for health-check, metrics/diagnostics, security and information, all these do not require security, that's why they have the `"secure": 0` attribute. By default all services are secure unless you set this attribute, if the attribute is not present, the service is secure.
 
-The config.json deployed in the QuickStart tutorial contains many more services that will server as examples for your own services, including services for uploding/downloading BLOBs.
+The config.json deployed in the QuickStart tutorial contains many more services that will serve as examples for your own services, including services for uploding/downloading BLOBs.
 
 ## The parts of a service definition
 
-### A service with no parameters
+### Simple service with no parameters
 
 The is the simples form of service:
 ```
@@ -110,7 +110,7 @@ This is the response to such a service:
 }
 ```
 
-### A service with parameters and audit trace
+### Service with parameters and audit trace
 
 This service will retrieve two resultsets, customer information and the customer's orders, so the response will contain two arrays, the definition of the service:
 ```
@@ -177,3 +177,23 @@ The response for this service:
 
 If you compare it with the example shown above, you will see that the data field now contains 2 subfields, customer and orders, because that's what we asked in the service definition ("tags" attribute).
 
+### Service to save data, with security restrictions
+
+This service will invoke a procedure to insert a row in a table, using multiple input parameters, you can see the use of different data types, all fields are required, there is also an authorizarion restriction, only users with any of the roles (can_insert, admin) will be able to execute this service, it's not enough to have a valid security session, the user must have any of those roles associated to the security session, this `user->roles` relation is configured in the underlying security system, this is external to CPPServer, but this information must be obtained during login using any of the CPPServer login adapters. The role names must exist in the underlying security system.
+```
+		{
+			"db": "db1",
+			"uri": "/ms/gasto/add",
+			"sql": "call sp_gasto_insert($fecha, $categ_id, $monto, $motivo)",
+			"function": "dbexec",
+			"fields": [
+				{"name": "monto", "type": "double", "required": "true"},
+				{"name": "fecha", "type": "date", "required": "true"},
+				{"name": "motivo", "type": "string", 	"required": "true"},
+				{"name": "categ_id", "type": "int", "required": "true"}
+			],
+			"roles": [{"name":"can_insert"}, {"name":"admin"}]
+		}
+```
+In this case the function used is `dbexec` which executes a data modification query, and won't retrieve a resultset.
+There is a special field marker that you can use in your SQL template: $userlogin, it will be replaced by the current user login name, this is retrieved from the security session, this way you
