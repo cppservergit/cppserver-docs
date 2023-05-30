@@ -73,7 +73,7 @@ It's relevant to note that HAProxy can use HTTP or HTTPS to contact the Ingress 
 
 This is a variation of the last model, but more expensive in terms of computing power because it does use a separate VM for each cluster node and also for the external HAProxy (load balancer).
 
-### Single-node Cluster with replica
+### Single-node cluster with replica
 
 ![arch-4](https://github.com/cppservergit/cppserver-docs/assets/126841556/1a248c9b-7cfc-4112-9ba0-9c13df07e1b4)
 
