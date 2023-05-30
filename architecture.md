@@ -78,6 +78,169 @@ This is a variation of the last model, but more expensive in terms of computing 
 ![arch-4](https://github.com/cppservergit/cppserver-docs/assets/126841556/1a248c9b-7cfc-4112-9ba0-9c13df07e1b4)
 
 In this model, which is similar to the first one, there is no HA cluster on Kubernetes, nevertheless you can have several Pods running on the node and there is load balancing and self-healing at the Pod level.
-What is relevant on this model is that you can have an identical copy of the 1st node, and configure HAProxy as the load balancer with the 2nd node as a backup or stand-by, if the 1st node stops working, HAProxy will start using the 2nd node, it is a way to have high availability on-prem with a couple of simple node setups. External resources like a static webstie must be placed in shared storage visible to both nodes. Each node is a single-node cluster, there is no relation between them, each one has its own control plane.
+What is relevant on this model is that you can have an identical copy of the 1st node, and configure HAProxy as the load balancer with the 2nd node as a backup or stand-by, if the 1st node stops working, HAProxy will start using the 2nd node, it is a way to have high availability on-prem with a couple of simple node setups. External resources like a static website must be placed in shared storage visible to both nodes. Each node is a single-node cluster, there is no relation between them, each one has its own control plane.
 
+## Deployment examples
+
+These are YAML examples for deployment of CPPServer on Kubernetes. They rely on the official CPPServer images stored at dockerhub, nevertheless, you can use a local registry with MicroK8s and suppy your own images, consider that on a zero-trust environment you may require to compile CPPServer by yourself and build your own docker image, and then feed this image to MicroK8s registry. Some of these deployments assume you only need SQL login adapter, so no LoginServer will be deployed, otherwise you have to deploy LoginServer with its own YAML. LoginServer provides focused login services to CPPServer and it also includes LDAP as a login option (configurable via environment variables), also if there is need to write very specific C++ code for authentication, having a separate LoginServer helps keep CPPServer isolated from these changes.
+
+![Pod deployment model](https://github.com/cppservergit/cppserver-docs/assets/126841556/842c282a-c00e-4a20-95fb-4678bd9c80ac)
+
+### Single node
+
+Uses hostPath storage (local filesystem), pre-defined secrets and a pre-loaded configMap for config.json. You would have to edit the location for the volumes, one for the static website (if you need it) and another for the blobs storage (/var/blobs), CPPServer uploads support depends on this path, cannot be changed. This deployment also installs the scheduled task CPPJob, to execute the procedure that removes expired security sessions. This is a simplified deployment that uses CPPServer built-in SQL login adapter, LoginServer is not being deployed in this case.
+```
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cppserver
+  namespace: cppserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cppserver
+  template:
+    metadata:
+      labels:
+        app: cppserver
+    spec:
+      volumes:
+      - name: blobs
+        hostPath:
+          path: /home/ubuntu/blobs
+      - name: www
+        hostPath:
+          path: /home/ubuntu/www
+      - name: config
+        configMap:
+          name: cppserver-config
+      containers:
+        - name: cppserver
+          image: cppserver/pgsql:1.2.0
+          livenessProbe:
+            httpGet:
+              path: /ms/ping
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /ms/ping
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          volumeMounts:
+          - name: blobs
+            mountPath: /var/blobs
+          - name: www
+            mountPath: /var/www
+          - name: config
+            mountPath: /etc/cppserver
+          env:
+          - name: CPP_POOL_SIZE
+            value: "4"
+          - name: CPP_LOGIN_LOG
+            value: "0"
+          - name: CPP_HTTP_LOG
+            value: "0"
+          - name: CPP_STDERR_LOG
+            value: "1"
+          - name: CPP_LOKI_SERVER
+            value: ""
+          - name: CPP_LOKI_PORT
+            value: "3100"
+          - name: CPP_DB1
+            valueFrom:
+              secretKeyRef:
+                name: cpp-secret-db1
+                key: connstr
+                optional: false
+          - name: CPP_SESSIONDB
+            valueFrom:
+              secretKeyRef:
+                name: cpp-secret-sessiondb
+                key: connstr
+                optional: false
+          - name: CPP_LOGINDB
+            valueFrom:
+              secretKeyRef:
+                name: cpp-secret-logindb
+                key: connstr
+                optional: false
+          ports:
+          - containerPort: 8080
+          imagePullPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cppserver
+  namespace: cppserver
+spec:
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: tcp
+  selector:
+    app: cppserver
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cppserver
+  namespace: cppserver
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /demo
+        pathType: Prefix
+        backend:
+          service:
+            name: cppserver
+            port:
+              number: 8080
+      - path: /ms
+        pathType: Prefix
+        backend:
+          service:
+            name: cppserver
+            port:
+              number: 8080
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cppjob
+  namespace: cppserver
+spec:
+  schedule: "*/2 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: cppjob
+            image: cppserver/pgsql-job:1.00
+            imagePullPolicy: Always
+            env:
+            - name: CPP_STDERR_LOG
+              value: "1"
+            - name: CPP_LOKI_SERVER
+              value: ""
+            - name: CPP_LOKI_PORT
+              value: "3100"
+            - name: CPP_JOB_QUERY
+              value: "call cpp_session_timeout()"
+            - name: CPP_JOB_DB
+              valueFrom:
+                secretKeyRef:
+                  name: cpp-secret-sessiondb
+                  key: connstr
+                  optional: false
+          restartPolicy: OnFailure
+```
 
