@@ -196,4 +196,100 @@ This service will invoke a procedure to insert a row in a table, using multiple 
 		}
 ```
 In this case the function used is `dbexec` which executes a data modification query, and won't retrieve a resultset.
-There is a special field marker that you can use in your SQL template: $userlogin, it will be replaced by the current user login name, this is retrieved from the security session, this way you
+There is a special field marker that you can use in your SQL template: $userlogin, it will be replaced by the current user login name, this is retrieved from the security session, this way you can insert or update this value in a given column, like for audit or ownership purposes.
+
+### Service with validation rule
+
+Is this example, we are using plain SQL, not a good practice, we should use procedures or functions that encapsulate the access to the database object, it does provide better security, but putting that aside, the interesting part is the `validator`.
+It will use the given function (db_nomatch in this case) and replace input parameters into the given SQL. For this example, this service will delete a row by it PK, but before we do that, we want to check if the row is referenced in another table, we know that the referencial integrity rules will protect the database, but we would like to show a specific validation message if this is the case, and not an error message, so the validator runs right after the inputs have been validated, and it must pass the condition, which for this example is "no rows should be returned from the given query", if the validator fails, the microservice is not executed and a JSON response with status INVALID in returned, you can configure whatever you want for id and description in the validtor attributes, in this case those were defined for the Web frontend included with CPPServer's tutorial.
+
+```
+		{
+			"db": "db1",
+			"uri": "/ms/categ/delete",
+			"sql": "delete from demo.categ where categ_id = $categ_id",
+			"function": "dbexec",
+			"fields": [
+				{"name": "categ_id", "type": "integer", "required": "true"}
+			],
+			"validator": { "function": "db_nomatch", "sql": "SELECT categ_id FROM demo.gasto where categ_id = $categ_id limit 1", "id": "_dialog_", "description": "$err.delete" },
+			"roles": [{"name":"sysadmin"}, {"name":"can_delete"}]
+		}
+```
+
+Usually a microservice that does not return one or more resultsets, will return a JSON response with status OK, like this:
+```
+{"status": "OK"}
+```
+
+Regarding the validator, there is another function called `db_match` which validates the opposite, if the SQL does not return rows then fail, with these two validators `db_nomatch` and `db_match` and SQL many common cases can be tested, as told before, all SQL attributes, for services and validators, should rely on invoking SQL functions and procedures, and the database role (user credential) used by CPPServer should only have access to execute a set of SQL functions and procedures, for security reasons and performance too, especially in the case of DBMS systems like SQL Server that pre-compile these objects.
+
+### Examples from Demo App
+
+The QuickStart tutorial installs a static webapp that is the frontend for the microservices included in config.json, it does include support for upload/download of blobs (documents), please take a look at that file, it's a good source of many examples that cover several common business cases, the same goes for the frontend webapp, this is a web-responsive framework in itself that has the added value that can be easily converted into a native mobile App using Apache Cordova.
+
+Shown here a subset of services, the ones that deal with blobs (there is a corresponding frontend module that invokes them):
+
+```
+		{
+			"db": "db1",
+			"uri": "/ms/blob/add",
+			"sql": "insert into demo.blob (document, filename, content_type, content_len, title) values ($document, $filename, $content_type, $content_len, $title)",
+			"function": "dbexec",
+			"fields": [
+				{"name": "title", "type": "string", "required": "true"},
+				{"name": "document", "type": "string", "required": "true"},
+				{"name": "filename", "type": "string", "required": "true"},
+				{"name": "content_type", "type": "string", "required": "true"},
+				{"name": "content_len", "type": "integer", "required": "true"}
+			],
+			"audit": {"enabled": "true", "record": "Upload: $filename, $content_len"}
+		},
+		{
+			"db": "db1",
+			"uri": "/ms/blob/view",
+			"sql": "select blob_id, title, content_type from demo.blob order by blob_id",
+			"function": "dbget"
+		},
+		{
+			"db": "db1",
+			"uri": "/ms/blob/delete",
+			"sql": "delete from demo.blob where blob_id = $blob_id",
+			"function": "deleteFile",
+			"fields": [
+				{"name": "blob_id", "type": "integer", "required": "true"}
+			]
+		},
+		{
+			"db": "db1",
+			"uri": "/ms/blob/download",
+			"sql": "select document,content_type,filename from demo.blob where blob_id = $blob_id",
+			"function": "download",
+			"fields": [
+				{"name": "blob_id", "type": "integer", "required": "true"}
+			]
+		},
+```
+
+## Review of all configuration options
+
+This example has all the configurable features for a service API, fields, validator, authorized roles and audit trace:
+
+```
+		{
+			"db": "db1",
+			"uri": "/ms/customer/info",
+			"sql": "select * from sp_customer_get($customerid); select * from sp_customer_orders($customerid)",
+			"function": "dbgetm",
+			"tags": [ {"tag": "customer"}, {"tag": "orders"} ],
+			"fields": [
+				{"name": "customerid", "type": "string", "required": "true"}
+			],
+			"audit": {"enabled": "true", "record": "Customer report: $customerid"},
+			"roles": [{"name":"access_customers"}, {"name":"admin"}],
+			"validator": { "function": "db_nomatch", "sql": "select * from sp_black_list($customerid)", "id": "_dialog_", "description": "$err.notavail" },
+		}
+```
+
+Please note that the audit trace (if enabled) will be registered only if the microservice was successfully executed.
+
