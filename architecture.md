@@ -60,6 +60,17 @@ The most simple setup, suitable for local development but also for testing, depe
 
 ![arch2](https://github.com/cppservergit/cppserver-docs/assets/126841556/cba43be7-f1ea-47de-8236-c36f1ef9a010)
 
-Using LXD to partition a single VM or bare-metal into three native Linux containers (lighter than a full VM) you can setup a high-availability MicroK8s cluster, which requires a minimum of three nodes, you can add more nodes, as worker nodes or stand-by nodes, it dependes on the computing power available on the VM or baremetal machine you are using for the cluster. What's very interesting in this setup is that you can use a single machine to create a high-availability multi-node K8s cluster, similar to a Cloud setup. CPPServer Pods would auto-scale across the nodes, Kubernetes takes care of that and much more. The storage (for the static website) must be shared for this setup, this is transparent to CPPServer as long as the shared storage can be mapped using a Kubernetes volume.
+Using LXD to partition a single VM or bare-metal into three native Linux containers (lighter than a full VM) you can setup a high-availability MicroK8s cluster, which requires a minimum of three nodes, you can add more nodes, as worker nodes or stand-by nodes, it dependes on the computing power available on the VM or baremetal machine you are using for the cluster. What's very interesting about this setup is that you can use a single machine to create a high-availability multi-node K8s cluster, similar to a Cloud setup. CPPServer Pods would auto-scale across the nodes, Kubernetes takes care of that and much more. The storage (for the static website) must be shared among the nodes of the cluster, this is transparent to CPPServer as long as the shared storage can be mapped using a Kubernetes volume, you can use an NFS server or a Kubernetes-native cluster wide storage solution.
+Check the [MicroK8s clustering guide](https://microk8s.io/docs/clustering) for more information about high-availability.
+
+In order to balance the load between the Kubernetes cluster nodes, HAProxy load balancer will be installed as a native Linux service, on the same host machine, but it will be the only process visible from the external network, the cluster nodes are not visible to the external network, they are on a subnet inside the host machine, which is only visible to HAProxy, there is a natural security feature in this setup as a consequence of using LXD to partition the host machine.
+
+It's relevant to note that HAProxy can use HTTP or HTTPS to contact the Pods, considering the host is closed to the external network, plain HTTP can be used to enhance performance.
+
+### High-availability cluster, multiple VMs
+
+![arch-3](https://github.com/cppservergit/cppserver-docs/assets/126841556/e3167d0e-e1bd-4712-befa-80bf89be2641)
+
+This is a variation of the last model, but more expensive in terms of computing power because it does use a separate VM for each cluster node and also for the external HAProxy (load balancer).
 
 
