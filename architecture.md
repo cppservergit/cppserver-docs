@@ -88,7 +88,8 @@ These are YAML examples for deployment of CPPServer on Kubernetes. They rely on 
 
 ### Single node
 
-Uses hostPath storage (local filesystem), pre-defined secrets and a pre-loaded configMap for config.json. You would have to edit the location for the volumes, one for the static website (if you need it) and another for the blobs storage (/var/blobs), CPPServer uploads support depends on this path, cannot be changed. This deployment also installs the scheduled task CPPJob, to execute the procedure that removes expired security sessions. This is a simplified deployment that uses CPPServer built-in SQL login adapter, LoginServer is not being deployed in this case.
+Uses hostPath storage (local filesystem), pre-defined secrets and a pre-loaded configMap for config.json. You would have to edit the location for the volumes, one for the static website (if you need it) and another for the blobs storage `/var/blobs`, CPPServer uploads support depends on this path, cannot be changed. This deployment also installs the scheduled task CPPJob, to execute the procedure that removes expired security sessions. This is a simplified deployment that uses CPPServer built-in SQL login adapter, LoginServer is not being deployed in this case. In the Ingress section there is a mapping to a static website /demo in this example, you can remove it if you are not serving static content with CPPServer, the same with the corresponding volume and its mapping. Note that if you are serving static content, the volume mapping must be `/var/www`.
+Regarding the creation of secrets and the confirMap, it is all explained in the [QuickStart tutorial](https://github.com/cppservergit/cppserver-docs/blob/main/quickstart.md).
 ```
 ---
 apiVersion: apps/v1
