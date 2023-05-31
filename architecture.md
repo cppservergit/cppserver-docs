@@ -89,7 +89,7 @@ These are YAML examples for deployment of CPPServer on Kubernetes. They rely on 
 ### Single node
 
 Uses hostPath storage (local filesystem), pre-defined secrets and a pre-loaded configMap for config.json. You would have to edit the location for the volumes, one for the static website (if you need it) and another for the blobs storage `/var/blobs`, CPPServer uploads support depends on this path, cannot be changed. This deployment also installs the scheduled task CPPJob, to execute the procedure that removes expired security sessions. This is a simplified deployment that uses CPPServer built-in SQL login adapter, LoginServer is not being deployed in this case. In the Ingress section there is a mapping to a static website /demo in this example, you can remove it if you are not serving static content with CPPServer, the same with the corresponding volume and its mapping. Note that if you are serving static content, the volume mapping must be `/var/www`.
-Regarding the creation of secrets and the confirMap, it is all explained in the [QuickStart tutorial](https://github.com/cppservergit/cppserver-docs/blob/main/quickstart.md).
+Regarding the creation of secrets and the configMap, it is all explained in the [QuickStart tutorial](https://github.com/cppservergit/cppserver-docs/blob/main/quickstart.md).
 ```
 ---
 apiVersion: apps/v1
@@ -253,7 +253,7 @@ Regarding config.json, it is a question of convenience, if you are changing conf
 
 ### Using NFS volumes
 
-Let's assume there is an NFS server that exports the following folders:
+Let's assume there is an NFS server at 192.168.0.222 that exports the following folders:
 ```
 /srv
 └── nfs
@@ -285,7 +285,7 @@ Let's assume there is an NFS server that exports the following folders:
             ├── shippers.html
             └── upload.html
 ```
-And you are using a high-availability cluster with 3+ nodes, and all the nodes need to access the same volumePaths, so when you update the static website, all Pods in all nodes can see the update, and when a user requests to download a blob, the it will be available regardless of the node/pod that served the request. To achieve this you need to be able to map /var/www to yourNFSserver:/srv/www  and /var/blobs to yourNFSserver:/srv/blobs.
+And you are using a high-availability cluster with 3+ nodes, and all the nodes need to access the same volumePaths, so when you update the static website, all Pods in all nodes can see the update, and when a user requests to download a blob, the it will be available regardless of the node/pod that served the request. To achieve this you need to be able to map /var/www to 192.168.0.222:/srv/nfs/www  and /var/blobs to 192.168.0.222:/srv/nfs/blobs.
 
 The first step is to install NFS client in every node of the cluster, tipically this happens when you are setting up all the infraestructure:
 
@@ -296,7 +296,22 @@ sudo install nfs-common -y
 
 That's all from the operating system side.
 
-The YAML to deploy CPPServer must be changed regarding the definition of the volumes and the volumesPath, although minimal changes:
+The YAML to deploy CPPServer must be changed regarding the definition of the volumes and the volumesPath, although minimal changes, first we define the NFS volume:
+```
+      volumes:
+      - name: nfs-server
+        nfs:
+          server: 192.168.0.222
+          path: /srv/nfs
+          readOnly: no
 ```
 
+Then we simplify the volumeMap, we only need a single one because of the way the NFS server organized its exports:
 ```
+          volumeMounts:
+          - name: nfs-server
+            mountPath: /var
+```
+
+This way /var/blobs and /var/www will point to the right shared folders, and will be available cluster-wide.
+
