@@ -245,3 +245,58 @@ spec:
           restartPolicy: OnFailure
 ```
 
+#### No Volumes
+
+If you are not going to serve a static website with CPPServer, receive uploads and you prefer to use config.json embedded into the container's image, then you can get rid of the volumes and volumeMounts sections shown above, and you won't need to create a configMap containing config.json prior to applying this YAML.
+Regarding config.json, it is a question of convenience, if you are changing config.json frequently (like during development) then you may want to keep it as a configMap and just `rollout restart` CPPServer deployment in order to load the new config.json. In production you may prefer using only an image containing config.json, and whenever there is an update in config.json, you will have to update the image and its tag (optional with dockerhub), update the reference in the YAML and apply it to the cluster, if you are using a local registry you need to change the image's tag (usually a version number) in order to make the deployment use the new image, this is not necessary when referencing the image from dockerhub (default).
+
+
+### Using NFS volumes
+
+Let's assume there is an NFS server that exports the following folders:
+```
+/srv
+└── nfs
+    ├── blobs
+    └── www
+        └── demo
+            ├── categ.html
+            ├── css
+            │   ├── frontend.css
+            │   ├── highcharts.css
+            │   ├── pico.css
+            │   └── pico.css.map
+            ├── customer.html
+            ├── gasto.html
+            ├── images
+            │   └── apple-icon.png
+            ├── index.html
+            ├── js
+            │   ├── common.js
+            │   ├── frontend.js
+            │   ├── highcharts-3d.js
+            │   ├── highcharts-3d.js.map
+            │   ├── highcharts.js
+            │   ├── highcharts.js.map
+            │   └── locale.js
+            ├── menu.html
+            ├── products.html
+            ├── sales.html
+            ├── shippers.html
+            └── upload.html
+```
+And you are using a high-availability cluster with 3+ nodes, and all the nodes need to access the same volumePaths, so when you update the static website, all Pods in all nodes can see the update, and when a user requests to download a blob, the it will be available regardless of the node/pod that served the request. To achieve this you need to be able to map /var/www to yourNFSserver:/srv/www  and /var/blobs to yourNFSserver:/srv/blobs.
+
+The first step is to install NFS client in every node of the cluster, tipically this happens when you are setting up all the infraestructure:
+
+```
+sudo apt update
+sudo install nfs-common -y
+```
+
+That's all from the operating system side.
+
+The YAML to deploy CPPServer must be changed regarding the definition of the volumes and the volumesPath, although minimal changes:
+```
+
+```
