@@ -1,4 +1,4 @@
-# Architecture and deployment with Kubernetes - DRAFT
+# Architecture and deployment with Kubernetes
 
 CPPServer is a compact, optimized native-code application for Linux, it can run as a SystemD service, even in cluster mode on several VMs or baremetal, always behind a Proxy/Load Balancer that provides the TLS endpoint and L7 protections, but that's a traditional approach, outdated.
 Now it's all about containers and orchestators, docker for containers' images and Kubernetes as the orchestator that provides all the cluster services: networking, automatic scalability, self-healing, observability and much more, and of course CPPServer was born ready for Kubernetes, from laptop to mainstream Cloud services like Azure or AWS.
