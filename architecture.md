@@ -315,3 +315,116 @@ Then we simplify the volumeMap, we only need a single one because of the way the
 
 This way /var/blobs and /var/www will point to the right shared folders, and will be available cluster-wide.
 
+### LoginServer deployment
+
+The role of the LoginServer component is explained in detail in the [Security Model document](https://github.com/cppservergit/cppserver-docs/blob/main/security-model.md), suffice to say that it is very similar to CPPServer, but focused on providing login service APIs only, plus diagnostic and metric, just as CPPServer. Its config.json is pretty static, you won't be changing it frequently, maybe never, so it can be used embedded in the container's image, no need to consider a configMap for this, also it does not manage any volumes, so its YAML will be simpler:
+
+```
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loginserver
+  namespace: cppserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: loginserver
+  template:
+    metadata:
+      labels:
+        app: loginserver
+    spec:
+      containers:
+        - name: loginserver
+          image: cppserver/pgsql-login:1.01
+          livenessProbe:
+            httpGet:
+              path: /loginserver/ping
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /loginserver/ping
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          env:
+          - name: CPP_POOL_SIZE
+            value: "4"
+          - name: CPP_LOGIN_LOG
+            value: "0"
+          - name: CPP_HTTP_LOG
+            value: "0"
+          - name: CPP_STDERR_LOG
+            value: "1"
+          - name: CPP_LOKI_SERVER
+            value: ""
+          - name: CPP_LOKI_PORT
+            value: "3100"
+          - name: CPP_LDAP_URL
+            value: "ldap://ldap.mshome.net:1389/"
+          - name: CPP_LDAP_USER_DN
+            value: "cn={userid},ou=users,dc=example,dc=org"
+          - name: CPP_LDAP_USER_BASE
+            value: "ou=users,dc=example,dc=org"
+          - name: CPP_LDAP_USERGROUPS_BASE
+            value: "ou=users,dc=example,dc=org"
+          - name: CPP_LDAP_USER_FILTER
+            value: "(userid={userid})"
+          - name: CPP_LDAP_USERGROUPS_FILTER
+            value: "(member={dn})"
+          - name: CPP_SESSIONDB
+            valueFrom:
+              secretKeyRef:
+                name: cpp-secret-sessiondb
+                key: connstr
+                optional: false
+          - name: CPP_LOGINDB
+            valueFrom:
+              secretKeyRef:
+                name: cpp-secret-logindb
+                key: connstr
+                optional: false
+          ports:
+          - containerPort: 8080
+          imagePullPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: loginserver
+  namespace: cppserver
+spec:
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: tcp
+  selector:
+    app: loginserver
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: loginserver
+  namespace: cppserver
+spec:
+  ingressClassName: traefik
+  rules:
+  - http:
+      paths:
+      - path: /loginserver
+        pathType: Prefix
+        backend:
+          service:
+            name: loginserver
+            port:
+              number: 8080
+```
+
+Its Ingress definition serves the path /loginserver, and the container serves /loginserver/login and /loginserver/loginldap, both can be used for different client applications. Please check the [LoginServer dockerhub](https://hub.docker.com/r/cppserver/pgsql-login) for complete details about this container.
+This deployment will only use the LoginDB and SessionDB, and LoginDB will only be used for the SQL login adapter, if you choose to use LDAP you won't be using connections to LoginDB database, but you will always use SessionDB regardless of the login mechanism in use.
+If you want a trace in STDERR log of all successful logins then set the environment variable `CPP_LOGIN_LOG` to 1. Invalid logins will always be printed to STDERR with a level of `WARN`, this is not configurable nor optional.
+
