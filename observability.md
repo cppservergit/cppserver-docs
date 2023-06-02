@@ -179,6 +179,8 @@ Please read [Promtail Kubernetes Installation](https://grafana.com/docs/loki/lat
     - url: https://{YOUR_LOKI_ENDPOINT}/loki/api/v1/push
 ```
 
+Direct access to the logs via kubectl (Kubernetes command line console) is explained in the [DevOps](https://github.com/cppservergit/cppserver-docs/blob/main/admin-tasks.md) guide. Requires `root` access to any of the cluster nodes.
+
 ### NGinx Ingress configMap
 
 This is the configMap that gets installed in the QuickStart tutorial in order to add some features to the Ingress Controller:
@@ -233,6 +235,48 @@ This is a sample of the log as printed by CPPServer to STDERR:
 
 This is an example of a log record with level=error displayed on Grafana console
 ![loki error display](https://github.com/cppservergit/cppserver-docs/assets/126841556/7d0d25e1-3ae0-4179-84d7-f5188cd747fd)
+
+#### Configurable options
+
+Via environment variables defined in cppserver.yaml you can define these log options (0=disabled, 1=enabled):
+```
+          - name: CPP_LOGIN_LOG
+            value: "0"
+          - name: CPP_HTTP_LOG
+            value: "0"
+```
+
+The option `CPP_LOGIN_LOG` will print a log record when a successful login occurs, with all the relevant details:
+```
+{"source":"security","level":"info","msg":"login OK - user: mcordova IP: 172.20.176.1 sessionid: 9527-b72caf20-1224-4dc2-89d5-2a6a9be556e7 roles: can_delete, can_insert, can_update, sysadmin","thread":"140347344016960","x-request-id":"6c31fef563e44b1f89cbc67bfafcfaaf"}
+```
+
+Failed login attempts are always logged with `level="warn"`, this is not configurable.
+
+The option `CPP_HTTP_LOG` will print the equivalent of an http access log, usually this is not necessary because those details are already saved in the Ingress logs, it is disabled by default. It may be useful if you are testing CPPServer in standalone mode (no Kubernetes, no HAProxy) and you want to see the access log for debug purposes.
+
+It is also possible to enable audit traces for individual services, in config.json, this is explained in detail in the [API configuration guide](https://github.com/cppservergit/cppserver-docs/blob/main/json-api-config.md#service-with-parameters-and-audit-trace), it is configured like this:
+
+```
+		{
+			"db": "db1",
+			"uri": "/ms/customer/info",
+			"sql": "select * from sp_customer_get($customerid); select * from sp_customer_orders($customerid)",
+			"function": "dbgetm",
+			"tags": [ {"tag": "customer"}, {"tag": "orders"} ],
+			"fields": [
+				{"name": "customerid", "type": "string", "required": "true"}
+			],
+			"audit": {"enabled": "true", "record": "Customer report: $customerid"}
+		}
+```
+
+The resulting output in the logs:
+```
+{"source":"audit","level":"info","msg":"path: /ms/customer/info user: mcordova remote-ip: 172.24.240.1 record: Customer report: BERGS","thread":"139651292444224","x-request-id":"2f3df589-4561-4762-8cf8-43458495669b"}
+```
+
+The audit record tells the whole story, who, when, what (path and fields), from where (ip), and it can be filtered by source=audit easily in Grafana.
 
 ## Tracing
 
