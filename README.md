@@ -84,6 +84,7 @@ CPPServer is vendor-agnostic, it was designed and built to run from Laptops to O
 * [Automatic Kubernetes-native security check with Trivy and MicroK8s](https://github.com/cppservergit/cppserver-docs/blob/main/security-check.md)
 * [Apply NetworkPolicy with CPPServer and MicroK8s clusters](https://github.com/cppservergit/cppserver-docs/blob/main/networkpolicy.md)
 * [Architecture and deployment options on Kubernetes](https://github.com/cppservergit/cppserver-docs/blob/main/architecture.md)
+* [Onservability with Grafana stack](https://github.com/cppservergit/cppserver-docs/blob/main/observability.md)
 
 ### Foundation
 * [Introduction to CPPServer](https://github.com/cppservergit/cppserver-docs/blob/main/microservice-anatomy.pdf)
