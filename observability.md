@@ -105,3 +105,83 @@ Prometheus configuration file prometheus.yml must be configured for collecting (
       - targets: ["k8s.mshome.net:10254"]
 ```
 
+### HAProxy metrics
+
+In case you are using HAProxy in front of you K8s cluster, HAProxy also incorporates an endpoint to export metrics to Prometheus, a frontend section must be configured in /etc/haproxy/haproxy.cfg:
+
+```
+frontend prometheus
+   bind *:8405
+   http-request use-service prometheus-exporter if { path /metrics }
+   no log
+```
+
+On the Prometheus side a configuration for HAProxy must be added to prometheus.yml.
+
+```
+  - job_name: haproxy
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["k8s.mshome.net:8405"]
+```
+
+Once Prometheus is collecting (pulling) all these metrics, you can use it as a DataSource to be used in Grafana Console, create dashboards and alerts (with email notifications) based on particular metrics.
+
+### Kubernetes cluster metrics
+
+Prometheus has a side project called [Node Exporter](https://github.com/prometheus/node_exporter) that allows to export metrics of every node on the Kubernetes cluster (OS related metrics), and there are pre-built dashboards to visualize this metrics in Grafana, pretty slick, it is up to you if you want to enable this exporter on your cluster.
+
+![image](https://github.com/cppservergit/cppserver-docs/assets/126841556/b5b74da2-80dc-422e-8562-23cda98a2034)
+
+## Logs
+
+Let's assume there is an external Loki server that is visible to your MicroK8s cluster. In this case you can install Promtail, a Kubernetes-native agent (Daemonset) that runs on every node of your cluster and will collect for you the logs of all the Pods on every node and push them to the Loki server.
+Then you can use Loki as a datasource for Grafana and visualize and query the logs using its advanced features, there are also export facilities and more. It's the modern way of managing logs, cluster-wide, independent of the applications running on the cluster, a well-behaved application only has to print its log messages to STDERR, JSON is the preferred format, leaving timestamps out because Kubernetes takes care of that, and Promtail knows that. CPPServer has LOKI-friendly logs, and we provide a configuration for Nginx Ingress so that its logs are also exported in JSON format (affects HTTP access logs only).
+
+Please read [Promtail Kubernetes Installation](https://grafana.com/docs/loki/latest/clients/promtail/installation/#daemonset-recommended) instructions, keep in mind that you have to edit this section of the YAML configMap to point to your LOKI server:
+
+```
+    clients:
+    - url: https://{YOUR_LOKI_ENDPOINT}/loki/api/v1/push
+```
+
+### NGinx Ingress configMap
+
+This is the configMap that gets installed in the QuickStart tutorial in order to add some features to the Ingress Controller:
+
+```
+sudo microk8s kubectl apply -f https://cppserver.com/files/ingress-config.yaml
+```
+
+ConfigMap:
+```
+--- 
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-load-balancer-microk8s-conf
+  namespace: ingress
+data:
+  proxy-body-size: "250M"
+  use-forwarded-headers: "true"
+  upstream-keepalive-connections: "20000"
+  skip-access-log-urls: "/ms/ping"
+  log-format-escape-json: "true"
+  log-format-upstream: '{
+      "timestamp": "$time_iso8601",
+      "remote_addr": "$remote_addr",
+      "method": "$request_method",
+      "request": "$request",
+      "status": $status,
+      "http_referrer": "$http_referer",
+      "http_user_agent": "$http_user_agent",
+      "request_id": "$req_id",
+      "cppsessionid": "$cookie_CPPSESSIONID"
+      "upstream_name", "$proxy_upstream_name",
+      "upstream_addr": "$upstream_addr",
+      "upstream_duration": $upstream_response_time
+    }'
+```
+
+
+
