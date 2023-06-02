@@ -39,6 +39,40 @@ cpp_avg_time{pod="cppserver-7f89f44f46-n4dtf"} 0.00001583
 # TYPE sessions counter
 sessions{pod="cppserver-7f89f44f46-n4dtf"} 0
 ```
+#### CPPServer microservice for metrics
+
+CPPServer has a built-in APIs to obtain metrics in JSON format, in case you are not using Prometheus for monitoring CPPServer:
+
+curl -s http://k8s.mshome.net/ms/status | jq
+
+```
+{
+  "status": "OK",
+  "data": [
+    {
+      "pod": "cppserver-deployment-67d6df4b57-xwxtc",
+      "totalRequests": 292646,
+      "avgTimePerRequest": 0.00143762,
+      "startedOn": "2023-02-12 22:36:42",
+      "connections": 2,
+      "activeThreads": 1
+    }
+  ]
+}
+```
+
+curl -s http://k8s.mshome.net/ms/sessions | jq
+
+```
+{
+  "status": "OK",
+  "data": [
+    {
+      "total": 0
+    }
+  ]
+}
+```
 
 ### LoginServer
 
