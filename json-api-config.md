@@ -228,6 +228,97 @@ As told before, all SQL attributes, for services and validators, should rely on 
 
 ![datbase-role](https://github.com/cppservergit/cppserver-docs/assets/126841556/77b10fb3-c869-4758-9eae-229d5965fb2e)
 
+### Sending email after execution of service
+
+CPPServer uses the library libcurl to send email using a secure SMTP server, like Google SMTP Server, you can use a gmail or google workspace account to send secure, content-rich email using Google's Server, but also any other TLS/SMTP server available to your Pods' network.
+
+![email-config](https://github.com/cppservergit/cppserver-docs/assets/126841556/fc7765e0-1fec-4c7d-8d2f-148424781c3d)
+
+This is the fragment of configuration that must be added to the definition of a service:
+
+```
+			"email": {	"enabled": "true", 
+						"template": "/var/mail/upload-msg.html", 
+						"to": "cppserver@martincordova.com", 
+						"cc": "", 
+						"subject": "Document upload notification", 
+						"attachment": "/var/blobs/$document", 
+						"attachment-filename": "$filename"
+					 }
+```
+
+This facility allow to send email after a successful execution of a service, the body will be HTML, you can insert field (input parameters) markers like $customerid into the html template body. The location of these templates should be a volume path available to all your Pods on any node, in a standalone cluster it can be a hostPath volume. 
+
+The configuration was designed to be able to map most common simple scenarios, in its present implementation it supports a single recipient for TO and CC fields, no batch dispatching yet, although one of the recipients could be an address configured to send the email to many recipients. The example above will send an email to a fixed recipient, attaching the just uploaded document, along with some information in the body (the user that uploaded the document, the document's filename, etc).
+
+#### Environment variables
+
+The following environment variables must be passed to the Pod, values shown here are for example only:
+
+* CPP_MAIL_SERVER="smtp://smtp.gmail.com:587"
+* CPP_MAIL_USER="notifications@martincordova.com"
+* CPP_MAIL_PWD="kjghssiirkcaozyuzt"
+
+The password `CPP_MAIL_PWD` should be injected into the environment variable as a Kubernetes secret, you could do the same for the user's email `CPP_MAIL_USER`, this will be the address used in the `FROM` header of the message.
+
+The message will be sent as multipart mime with HTML body regardless if it does include an attachment or not. In the current implementation only one attachment can be defined, CPPServer's modern C++ API for libcurl supports multiple attachments, but this has not been enabled in the JSON configuration yet.
+
+#### Configuration options
+
+* enabled: true/false, if false then the configuration will be ignored and no email will be sent
+* template: the path to the html template, this file can contain field markers like ´$contactname´ of any field defined for the service
+* to: recipient, it can be a static address like `cppserver@martincordova.com`, the user's email `$usermail` obtained from the security session, and any of the input fields defined for the service, like `$patient_email`
+* cc: same rules as above
+* subject: the mail's subject text, no variables allowed in this field
+* attachment: optional, the path to the file to be sent as an attachment, in case the file is a blob, like in the example avove, its filename won't be descriptive of its content's type (it's an UUID), in that case you can use the next field
+* attachment-filename: optional, a filename with extension that can be used to set the content-type of the attachment, it can be a field marker like `$filename` if that field contains the real filename, like in the example above. This should be used in case the `attachment` attribute is not enough to describe the content type of the attachment, like in the case of a blob whose filename is a UUID like `934-ue88-ksj8fkkm9-xx09`
+
+#### Complete example with email configuration
+
+```
+		{
+			"db": "db1",
+			"uri": "/ms/blob/add",
+			"sql": "insert into demo.blob (document, filename, content_type, content_len, title) values ($document, $filename, $content_type, $content_len, $title)",
+			"function": "dbexec",
+			"fields": [
+				{"name": "title", "type": "string", "required": "true"},
+				{"name": "document", "type": "string", "required": "true"},
+				{"name": "filename", "type": "string", "required": "true"},
+				{"name": "content_type", "type": "string", "required": "true"},
+				{"name": "content_len", "type": "integer", "required": "true"}
+			],
+			"audit": {"enabled": "false", "record": "Upload: $filename, $content_len"},
+			"email": {	"enabled": "true", 
+						"template": "/var/mail/upload-msg.html", 
+						"to": "cppserver@martincordova.com", 
+						"cc": "$usermail", 
+						"subject": "Document upload notification", 
+						"attachment": "/var/blobs/$document", 
+						"attachment-filename": "$filename"
+					 }
+		}
+```
+
+#### Message body HTML template example
+
+You can see in this template how field markers can be injected into the mail's body, the complexity of the HTML code used is up to you, images should be included from their original internet locations.
+
+```
+<html>
+  <body>
+        <h1>Document Upload Notice</h1>
+        <h2>Demo App</h2>
+        <p>The following document was uploaded by user: <b>$userlogin</b></p>
+        <p>
+                <b>File:</b> $filename<br/>
+                <b>Size:</b> $content_len bytes<br/>
+                <b>Title:</b> $title<br/>
+        </p>
+  </body>
+</html>
+```
+
 ### Examples from Demo App
 
 The QuickStart tutorial installs a static webapp that is the frontend for the microservices included in config.json, it does include support for upload/download of blobs (documents), please take a look at that file, it's a good source of many examples that cover several common business cases, the same goes for the frontend webapp, this is a web-responsive framework in itself that has the added value that can be easily converted into a native mobile App using Apache Cordova.
