@@ -363,7 +363,7 @@ Shown here a subset of services, the ones that deal with blobs (there is a corre
 			"fields": [
 				{"name": "blob_id", "type": "integer", "required": "true"}
 			]
-		},
+		}
 ```
 
 ## Review of all configuration options
@@ -383,6 +383,13 @@ This example has all the configurable features for a service API, fields, valida
 			"audit": {"enabled": "true", "record": "Customer report: $customerid"},
 			"roles": [{"name":"access_customers"}, {"name":"admin"}],
 			"validator": { "function": "db_nomatch", "sql": "select * from sp_black_list($customerid)", "id": "_dialog_", "description": "$err.notavail" },
+			"email": {  	"enabled": "true", 
+				    	"template": "/var/mail/msg-template.html", 
+					"to": "cppserver@martincordova.com", 
+					"cc": "", 
+					"subject": "Customer search notification", 
+					"attachment": "", 
+					"attachment-filename": "" }			
 		}
 ```
 
