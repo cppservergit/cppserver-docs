@@ -105,7 +105,7 @@ We avoid by all means calling `read()` or `write()` if there is no data availabl
 
 This is the function call graph for main.cpp which is the module that starts the process and controls the epoll loop:
 
-![main-call-graph](https://github.com/cppservergit/cppserver-docs/assets/126841556/7d0668c8-81a1-4407-a2cf-35af5216cae7)
+![main-call-graph](https://github.com/cppservergit/cppserver-docs/assets/126841556/48ec59ad-6c0c-4cf7-8bf9-a660499e3175)
 
 ### The Consumer
 
