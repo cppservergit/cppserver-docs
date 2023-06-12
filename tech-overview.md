@@ -237,6 +237,7 @@ The client of a module only has access to the module's interface, implementation
 |session|session::|Provides functions for security session management using PostgreSQL native API|
 |login|login::|Provides login service using PostgreSQL native API|
 |audit|audit::|Saves audit record, default implementation uses logger module|
+|email|smtp::|A libcurl wrapper for secure SMTP|
 
 There is fair separation of concerns between these modules, which is good for design, because it helps isolate changes when necessary, let's say there is a bug parsing HTTP request headers, the fix would be isolated to httputils.cpp module implementation, from the build system perspective (Makefile) only this module would require recompilation, and its dependant targets if any.
 
@@ -278,6 +279,8 @@ We use a thread_local variable in the microservice engine module (mse.cpp) to ma
 					m->second.serviceFunction( m_json_buffer, m->second );
 					if ( m->second.audit_enabled )
 						audit::save(req.path, t_user_info.userLogin, req.remote_ip, m->second);
+					if (m->second.email_config.enabled)
+						send_mail(m->second);
 				}
 				return m_json_buffer;
 			} else {
@@ -331,7 +334,7 @@ They receive the worker thread's JSON buffer to store the response, and a variab
 The microservice data structure is central to this mechanism, when config.json is parsed, each entry (if valid) will be converted into a variable of this type:
 
 ```
-	struct microService 
+	struct microService
 	{
 		std::string db;
 		std::string sql;
@@ -350,6 +353,15 @@ The microservice data structure is central to this mechanism, when config.json i
 		std::function<void(std::string& jsonResp, microService&)> customValidator;
 		bool audit_enabled {false};
 		std::string audit_record;
+		struct email {
+			bool enabled {false}; 
+			std::string body_template; 
+			std::string to; 
+			std::string cc;
+			std::string subject;
+			std::string attachment;
+			std::string attachment_filename;
+		} email_config;
 	};
 ```
 
