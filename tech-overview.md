@@ -8,7 +8,7 @@ CPPServer is a minimal (~300K) http server whose sole purpose is to serve GET/PO
 
 It was written in _Modern_ C++, compiled to optimized native code, no memory leaks, depends on PostgreSQL native client API (libpq5) and a JSON configuration file (/etc/cppserver/config.json), designed to be run as a container on Kubernetes, from Laptops to the Cloud, or as a native Linux service, it is in fact, a native Linux application, tied to the EPOLL API, it's an async, non-blocking, event-based socket server, it can serve thousands of concurrent connections with only one thread, no [c10K connection problem](https://en.wikipedia.org/wiki/C10k_problem) here.
 
-![basic-dependencies](https://github.com/cppservergit/cppserver-docs/assets/126841556/cfa3cbc6-190c-4baf-859c-f54985efe278)
+![basic-dependencies](https://github.com/cppservergit/cppserver-docs/assets/126841556/de2dd832-b259-4de0-9b59-2210691d02c3)
 
 Thus CPPServer can be defined as a high-peformance, compact, no-code JSON API engine, you don't have to write C++ to create an HTTP API that retuns JSON from SQL queries, it's already written inside CPPServer, you only have to configure your API in config.json and let CPPServer parse this file and serve the requests. Security, observability, tracing, audit logs, native access to the database, it's all included in this program. CPPServer is [open-source](https://github.com/cppservergit/cppserver-pgsql), so it's up to you to add/change features in the code.
 
