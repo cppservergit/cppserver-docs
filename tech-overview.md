@@ -28,7 +28,7 @@ So, controversial as it may be the use of this Map (std::map) and the passing of
 
 ### Single-thread EPOLL manager
 
-Only the main thread, the one that controls the EPOLL event loop, will accept connections and perform read/write operations on sockets, the worker threads only use the assembled request to execute the service using the inputs and produce a JSON output, when the output is ready, the main thread will be notified by EPOLL to write to the socket, all socket operations are non-blocking. The code follow Linux AAPI guidance in order to minimize system calls, for instance, when accepting new connections, a single call `accept4()` accepts and sets the new socket in non-blocking mode:
+Only the main thread, the one that controls the EPOLL event loop, will accept connections and perform read/write operations on sockets, the worker threads only use the assembled request to execute the service using the inputs and produce a JSON output, when the output is ready, the main thread will be notified by EPOLL to write to the socket, all socket operations are non-blocking. The code follow Linux API guidance in order to minimize system calls, for instance, when accepting new connections, a single call `accept4()` accepts and sets the new socket in non-blocking mode:
 
 ```
  		  else if (listen_fd == events[i].data.fd) // new connection.
@@ -210,7 +210,7 @@ CPPServer uses a classic C-style module organization for its translation units, 
 
 This is the modular structure of CPPServer:
 
-![module-structure](https://github.com/cppservergit/cppserver-docs/assets/126841556/ea5740c8-b056-412d-a487-ce0eb7235938)
+![module-structure](https://github.com/cppservergit/cppserver-docs/assets/126841556/77b9e05a-0a3f-424e-8fc6-5debb1ceb9c6)
 
 The client of a module only has access to the module's interface, implementation details can change and the client won't be affected, this is the case with the module sql.cpp, there is an implementation (default one) for PostgreSQL native API and another for ODBC, which is the native API for SQLServer. The client of this module (mse.cpp) does not get affected by the implementation sql.cpp, the code is clean, each module exposes its own namespace. Below is the implementation of a generic function that executes an SQL command that returns a resultset as a JSON array, whatever the implementation of sql:: is, this code remains the same.
 
