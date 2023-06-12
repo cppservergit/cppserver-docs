@@ -466,4 +466,29 @@ CPPServer accepts GET/POST HTTP requests only, basically when a request arrives 
 
 ![request-workflow](https://github.com/cppservergit/cppserver-docs/assets/126841556/22cfc9cc-f979-4b86-8bb7-1e0bfd4a89e8)
 
+## Send email in the background
 
+CPPServer relies on the battle-proven libcurl library to send secure email (SMTP over TLS) with optional attachments, a [flexible mechanism](https://github.com/cppservergit/cppserver-docs/blob/main/json-api-config.md#sending-email-after-execution-of-service) was designed so that email dispatching can be configured in config.json as part of the microservice definition. A module email.h encapsulates the low-level API of libcurl and makes it very easy to implement SMTP in CPPServer using Modern C++.
+
+Sending email can take a long time (several seconds), depending if big attachments are being used and also if the connection to the SMTP server is not that fast, regardless of the time it takes, this task won't affect the performance of CPPServer, because the code for sending email runs in a dettached thread, meaning it is started by the microservice's thread, the function that started it returns immediately and the thread continues to run in background without blocking the capacity of the main thread to receive and dispatch requests. The mail task (if configured) will only be triggered if the microservice executed without triggering an exception. 
+
+Using a lambda, a new thread is created, and then the `detach()` method is called to allow the new thread to continue running despite that the function that spawns the thread reaches its end, the jthread destructor won't be invoked, not until the jthread function finishes after `m.send()`, then all the resources allocated by this jthread will be released. The lambda receives copies of all the data it requires to avoid problems when the invoker function terminates.
+
+```
+		//send mail using background thread
+		std::jthread task ( [ms, body]() {
+			smtp::mail m(env::get_str("CPP_MAIL_SERVER"), env::get_str("CPP_MAIL_USER"), env::get_str("CPP_MAIL_PWD"));
+			m.to = ms.email_config.to;
+			m.cc = ms.email_config.cc;
+			m.subject = ms.email_config.subject;
+			m.body = body;
+			if (!ms.email_config.attachment.empty()) {
+				if (!ms.email_config.attachment_filename.empty())
+					m.add_attachment(ms.email_config.attachment, ms.email_config.attachment_filename);
+				else
+					m.add_attachment(ms.email_config.attachment);
+			}
+			m.send();
+		} );
+		task.detach();
+```
