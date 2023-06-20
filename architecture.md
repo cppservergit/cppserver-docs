@@ -23,7 +23,7 @@ The basic dockerfile to build the image:
 FROM ubuntu:latest
 LABEL maintainer="cppserver@martincordova.com"
 RUN apt update
-RUN apt install -y --no-install-recommends libpq5
+RUN apt install -y --no-install-recommends libpq5 libcurl4
 RUN apt clean
 RUN mkdir /opt/cppserver
 RUN mkdir /etc/cppserver
@@ -33,15 +33,12 @@ ENV CPP_HTTP_LOG=0
 ENV CPP_POOL_SIZE=4
 ENV CPP_PORT=8080
 ENV CPP_LOGIN_LOG=0
-ENV CPP_STDERR_LOG=1
-ENV CPP_LOKI_SERVER=""
-ENV CPP_LOKI_PORT=3100
 EXPOSE 8080
 WORKDIR /opt/cppserver
 ENTRYPOINT ["./cppserver"]
 ```
 
-The dockerfile is veru basic, it does not contain any security-related settings because those are set in the cppserver.yaml file, the deployment descriptor for Kubernetes.
+The dockerfile is very basic, it does not contain any security-related settings because those are set in the cppserver.yaml file, the deployment descriptor for Kubernetes.
 For more information please check the [official CPPServer image repository](https://hub.docker.com/r/cppserver/pgsql) at dockerhub.
 
 ## Kubernetes deployment options
@@ -82,13 +79,13 @@ What is relevant on this model is that you can have an identical copy of the 1st
 
 ## Deployment examples
 
-These are YAML examples for deployment of CPPServer on Kubernetes. They rely on the official CPPServer images stored at dockerhub, nevertheless, you can use a local registry with MicroK8s and suppy your own images, consider that on a zero-trust environment you may require to compile CPPServer by yourself and build your own docker image, and then feed this image to MicroK8s registry. Some of these deployments assume you only need SQL login adapter, so no [LoginServer](https://hub.docker.com/r/cppserver/pgsql-login) will be deployed, otherwise you have to deploy LoginServer with its own YAML. LoginServer provides focused login services to CPPServer and it also includes LDAP as a login option (configurable via environment variables), also if there is need to write very specific C++ code for authentication, having a separate LoginServer helps keep CPPServer isolated from these changes.
+These are YAML examples for deployment of CPPServer on Kubernetes. They rely on the official CPPServer images stored at dockerhub, nevertheless, you can use a local registry with MicroK8s and suppy your own images, consider that on a zero-trust environment, you may require to compile CPPServer by yourself and build your own docker image, and then feed this image to MicroK8s registry. Some of these deployments assume you only need SQL login adapter, so no [LoginServer](https://hub.docker.com/r/cppserver/pgsql-login) will be deployed, otherwise, you have to deploy LoginServer with its own YAML. LoginServer provides focused login services to CPPServer and it also includes LDAP as a login option (configurable via environment variables), also if there is a need to write very specific C++ code for authentication, having a separate LoginServer helps keep CPPServer isolated from these changes.
 
 ![Pod deployment model](https://github.com/cppservergit/cppserver-docs/assets/126841556/842c282a-c00e-4a20-95fb-4678bd9c80ac)
 
 ### Single node
 
-Uses hostPath storage (local filesystem), pre-defined secrets and a pre-loaded configMap for config.json. You would have to edit the location for the volumes, one for the static website (if you need it) and another for the blobs storage `/var/blobs`, CPPServer uploads support depends on this path, cannot be changed. This deployment also installs the scheduled task CPPJob, to execute the procedure that removes expired security sessions. This is a simplified deployment that uses CPPServer built-in SQL login adapter, LoginServer is not being deployed in this case. In the Ingress section there is a mapping to a static website /demo in this example, you can remove it if you are not serving static content with CPPServer, the same with the corresponding volume and its mapping. Note that if you are serving static content, the volume mapping must be `/var/www`.
+Uses hostPath storage (local filesystem), pre-defined secrets, and a pre-loaded configMap for config.json. You would have to edit the location for the volumes, one for the static website (if you need it) and another for the blobs storage `/var/blobs`, CPPServer uploads support depends on this path, cannot be changed. This deployment also installs the scheduled task CPPJob, to execute the procedure that removes expired security sessions. This is a simplified deployment that uses CPPServer built-in SQL login adapter, LoginServer is not being deployed in this case. In the Ingress section there is a mapping to a static website /demo in this example, you can remove it if you are not serving static content with CPPServer, the same with the corresponding volume `www` and its mapping. Note that if you are serving static content, the volume mapping must be `/var/www`.
 Regarding the creation of secrets and the configMap, it is all explained in the [QuickStart tutorial](https://github.com/cppservergit/cppserver-docs/blob/main/quickstart.md).
 ```
 ---
@@ -140,18 +137,14 @@ spec:
           - name: config
             mountPath: /etc/cppserver
           env:
+          - name: CPP_PORT
+            value: "8080"
           - name: CPP_POOL_SIZE
             value: "4"
           - name: CPP_LOGIN_LOG
             value: "0"
           - name: CPP_HTTP_LOG
             value: "0"
-          - name: CPP_STDERR_LOG
-            value: "1"
-          - name: CPP_LOKI_SERVER
-            value: ""
-          - name: CPP_LOKI_PORT
-            value: "3100"
           - name: CPP_DB1
             valueFrom:
               secretKeyRef:
@@ -247,7 +240,7 @@ spec:
 
 #### No Volumes
 
-If you are not going to serve a static website with CPPServer, receive uploads and you prefer to use config.json embedded into the container's image, then you can get rid of the volumes and volumeMounts sections shown above, and you won't need to create a configMap containing config.json prior to applying this YAML.
+If you are not going to serve a static website with CPPServer, receive uploads and prefer to use config.json embedded into the container's image, then you can get rid of the volumes and volumeMounts sections shown above, and you won't need to create a configMap containing config.json prior to applying this YAML.
 Regarding config.json, it is a question of convenience, if you are changing config.json frequently (like during development) then you may want to keep it as a configMap and just `rollout restart` CPPServer deployment in order to load the new config.json. In production you may prefer using only an image containing config.json, and whenever there is an update in config.json, you will have to update the image and its tag (optional with dockerhub), update the reference in the YAML and apply it to the cluster, if you are using a local registry you need to change the image's tag (usually a version number) in order to make the deployment use the new image, this is not necessary when referencing the image from dockerhub (default).
 
 
