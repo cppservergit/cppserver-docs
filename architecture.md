@@ -221,12 +221,6 @@ spec:
             image: cppserver/pgsql-job:1.00
             imagePullPolicy: Always
             env:
-            - name: CPP_STDERR_LOG
-              value: "1"
-            - name: CPP_LOKI_SERVER
-              value: ""
-            - name: CPP_LOKI_PORT
-              value: "3100"
             - name: CPP_JOB_QUERY
               value: "call cpp_session_timeout()"
             - name: CPP_JOB_DB
@@ -331,7 +325,7 @@ spec:
     spec:
       containers:
         - name: loginserver
-          image: cppserver/pgsql-login:1.01
+          image: cppserver/pgsql-login:1.2.0
           livenessProbe:
             httpGet:
               path: /loginserver/ping
@@ -345,18 +339,14 @@ spec:
             initialDelaySeconds: 3
             periodSeconds: 5
           env:
+          - name: CPP_PORT
+            value: "8080"
           - name: CPP_POOL_SIZE
             value: "4"
           - name: CPP_LOGIN_LOG
             value: "0"
           - name: CPP_HTTP_LOG
             value: "0"
-          - name: CPP_STDERR_LOG
-            value: "1"
-          - name: CPP_LOKI_SERVER
-            value: ""
-          - name: CPP_LOKI_PORT
-            value: "3100"
           - name: CPP_LDAP_URL
             value: "ldap://ldap.mshome.net:1389/"
           - name: CPP_LDAP_USER_DN
@@ -404,7 +394,7 @@ metadata:
   name: loginserver
   namespace: cppserver
 spec:
-  ingressClassName: traefik
+  ingressClassName: nginx
   rules:
   - http:
       paths:
