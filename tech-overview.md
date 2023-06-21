@@ -20,6 +20,50 @@ The main module starts the server and the pool of worker threads, there is only 
 
 ![thread-pool](https://github.com/cppservergit/cppserver-docs/assets/126841556/e7f13be4-6fc9-446c-a27f-d11dea2349d3)
 
+The main module starts the process, the workers' pool and the epoll loop on the main thread:
+
+```
+void start_server() noexcept
+{
+	const int pool_size {env::pool_size()};
+	const int port {env::port()};
+
+	//create workers pool - consumers
+	std::vector<std::stop_source> stops(pool_size);
+	std::vector<std::jthread> pool(pool_size);
+	for (int i = 0; i < pool_size; i++) {
+		stops[i] = std::stop_source();
+		pool[i] = std::jthread(consumer, stops[i].get_token());
+	}
+	
+	start_epoll(port);
+	
+	//shutdown workers
+	for (auto s: stops) {
+		s.request_stop();
+		{
+			std::scoped_lock lock {m_mutex};
+			m_cond.notify_all();
+		}
+	}
+}
+
+int main()
+{
+	m_signal = get_signalfd();
+	logger::log("signal", "info", "signal interceptor registered");
+	
+	char hostname[100]; gethostname(hostname, sizeof(hostname));
+	std::string pod_name(hostname);
+
+	print_server_info(pod_name);
+	config::parse();
+	start_server();
+
+	logger::log("server", "info", pod_name + " shutting down...");
+}
+```
+
 We keep locking to a minimum, only to coordinate access to the message queue (std::queue) between the Producer and the Consumers, the rest of the program is lock-free, each worker thread has its own database connection, there is no need of connection pooling this way, and the database component is able to recover from an invalid connection in a way transparent to the client, although detailed logs will be recorded when this happens.
 
 The lock-free, controversial part of this program is a Map that contains the socket's FD associated with a data structure that contains the HTTP request (represented as fields, headers, body, etc) and the response buffer, so when a connection is established, a new entry in this map will be created if necessary (it may already exist, in that case no creation overhead), all this happens in the main thread and no other thread will be touching that particular pair of FD and Request/Response object, the FD, which is passed in all EPOLL events is the index to retrieve this high-level Request object, and it is passed (as a reference) to the message queue to be consumed by the worker threads. The thing is, there won't be more than a single thread reading or writing on the same Request/Response object at the same time, there is no data race, but if you use compiler instrumentation or valgrind to test for thread sanity, a lot of warnings will be issued, false positives, because these tools detect that different threads did reads/writes on the same objects without locks. Because the way the program is written, there is no chance for 2 or more threads to perform reads or writes at the same time on the same request object, therefore, no data races in the strict sense, this lock-free management of these requests objects yields high performance, if scoped locks were applied, there would be no warnings on thread sanity, but performance would suffer under high concurrency, A LOT, it was tested and verified.
@@ -204,7 +248,7 @@ This will break the EPOLL loop, close server sockets and trigger the order for a
 
 CPPServer uses a classic C-style module organization for its translation units, every module declares its own namespace to enclose all elements (variables, functions, etc), a  header (.H) file to declare the interface and a corresponding .CPP file containing the implementation of the interface, only the elements declared in the interface file will be available to the clients of that module, whatever is not declared in the interface, won't be visible from the implementation module. This translation units are compiled separately, and when using a Makefile, only what has been changed needs to be recompiled (and any targets that depend on it). No header-only libraries are used, except for the JSON parser, which is a 3rd party open-source component. This helps make the compilation process simple and faster, -O3 and link-time-optimization are used for all the targets.
 
-![module-interface](https://github.com/cppservergit/cppserver-docs/assets/126841556/c21ae584-b78f-4868-b182-fbf101da22cb)
+![module-structure](https://github.com/cppservergit/cppserver-docs/assets/126841556/2ebd881d-d475-4db7-91e1-a490de705626)
 
 [C++20 modules](https://en.cppreference.com/w/cpp/language/modules) are superior to the classic C-style .H/.CPP modules, but sadly in GCC-12.x the C++ 20 Modules implementation is not production-ready yet.
 
@@ -231,7 +275,6 @@ The client of a module only has access to the module's interface, implementation
 |logger|logger::|prints log messages to stderr in JSON format for LOKI, also can push log record to LOKI if configured (optional)|
 |config|config::|Parse config.json, provides microservice and requestParameters structs|
 |httputils|http::|Provides abstractions for http request and response|
-|loki|loki::|Provides push API via plain http to LOKI server, optional use, may be removed in future versions|
 |mse|mse::|Microservice engine, provides the generic functions to execute different types of common microservices, plus the mechanism for invokation given the configuration|
 |sql|sql::|Encapsulates the PostgreSQL native API and builds JSON from resultsets when required, a version of this module for ODBC is also available|
 |session|session::|Provides functions for security session management using PostgreSQL native API|
@@ -239,7 +282,7 @@ The client of a module only has access to the module's interface, implementation
 |audit|audit::|Saves audit record, default implementation uses logger module|
 |email|smtp::|A libcurl wrapper for secure SMTP|
 
-There is fair separation of concerns between these modules, which is good for design, because it helps isolate changes when necessary, let's say there is a bug parsing HTTP request headers, the fix would be isolated to httputils.cpp module implementation, from the build system perspective (Makefile) only this module would require recompilation, and its dependant targets if any.
+There is fair separation of concerns between these modules, which is good for design because it helps isolate changes when necessary, let's say there is a bug parsing HTTP request headers, the fix would be isolated to httputils.cpp module implementation, from the build system perspective (Makefile) only this module would require recompilation, and its dependant targets if any.
 
 ## Memory management
 
@@ -436,7 +479,7 @@ This map of microservice objects is the link between the request URI and the fun
 
 ### Inventory of service API functions
 
-These are the utility functions that cover a wide variety of business cases, assuming there is a layer of stored procedures/functions in the target database that encapsulate the business logic, as is the case in many corporate SQL databases. There are also some functions for security, diagnostics, monitoring, health check and blobs support.
+These are the utility functions that cover a wide variety of business cases, assuming there is a layer of stored procedures/functions in the target database that encapsulate the business logic, as is the case in many corporate SQL databases. There are also some functions for security, diagnostics, monitoring, health check, and blobs support.
 
 |Function|Description|
 |--------|-----------|
