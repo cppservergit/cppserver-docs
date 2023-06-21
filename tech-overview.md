@@ -248,7 +248,7 @@ This will break the EPOLL loop, close server sockets and trigger the order for a
 
 CPPServer uses a classic C++ module (.H/.CPP) organization for its translation units, every module declares its own namespace to enclose all elements (variables, functions, etc), a  header (.H) file to declare the public interface and a corresponding .CPP file containing the implementation of the interface, by default, only the elements declared in the interface file will be available to other units that include that module, whatever is not declared in the interface won't be visible from the implementation module, but if another unit declares the namespace with the non-visible elements (those not declared in the .H file) then those elements will be visible. An example of this case:
 
-### Case 1 - hello.cpp can't call test::not_visible_fn() because it was not declared in the test.h file, so far so good
+__Case 1 - hello.cpp can't call test::not_visible_fn() because it was not declared in the test.h file, so far so good__
 ```
 test.h
 namespace test
@@ -273,7 +273,7 @@ int main()
 }
 ```
 
-### Case 2 - hello.cpp has a declaration of the namespace with the "private" functions, those are not private anymore
+__Case 2 - hello.cpp has a declaration of the namespace with the "private" functions, those are not private anymore__
 ```
 hello.cpp
 #include "test.h"
@@ -285,6 +285,7 @@ int main()
 }
 ```
 
+__Case 3 - unnamed namespace__
 To avoid the breach shown above in `Case 2` you can use an unnamed namespace in test.cpp, this way the function remains private, only visible to test.cpp, it can't be declared in hello.cpp, example:
 ```
 test.cpp
@@ -298,6 +299,7 @@ namespace test
         void visible_fn() { not_visible_fn(); }
 }
 ```
+Now there is nothing hello.cpp can do to access not_visible_fn(), it gets constrained to the public interface of test, at most to the named namespace test:: as shown in `case 2`.
 
 These translation units are compiled separately, and when using a Makefile, only what has been changed needs to be recompiled (and any targets that depend on it). No header-only libraries are used, except for the JSON parser, which is a 3rd party open-source component. This helps make the compilation process simple and fast, -O3 and link-time-optimization are used for all the targets.
 
