@@ -246,15 +246,16 @@ This will break the EPOLL loop, close server sockets and trigger the order for a
 
 ## Modular organization
 
-CPPServer uses a classic C-style module organization for its translation units, every module declares its own namespace to enclose all elements (variables, functions, etc), a  header (.H) file to declare the interface and a corresponding .CPP file containing the implementation of the interface, only the elements declared in the interface file will be available to the clients of that module, whatever is not declared in the interface, won't be visible from the implementation module. This translation units are compiled separately, and when using a Makefile, only what has been changed needs to be recompiled (and any targets that depend on it). No header-only libraries are used, except for the JSON parser, which is a 3rd party open-source component. This helps make the compilation process simple and faster, -O3 and link-time-optimization are used for all the targets.
+CPPServer uses a classic C++ module (.H/.CPP) organization for its translation units, every module declares its own namespace to enclose all elements (variables, functions, etc), a  header (.H) file to declare the public interface and a corresponding .CPP file containing the implementation of the interface, only the elements declared in the interface file will be available to the clients of that module, whatever is not declared in the interface, won't be visible from the implementation module. These translation units are compiled separately, and when using a Makefile, only what has been changed needs to be recompiled (and any targets that depend on it). No header-only libraries are used, except for the JSON parser, which is a 3rd party open-source component. This helps make the compilation process simple and fast, -O3 and link-time-optimization are used for all the targets.
 
-![module-structure](https://github.com/cppservergit/cppserver-docs/assets/126841556/2ebd881d-d475-4db7-91e1-a490de705626)
+![module-interface](https://github.com/cppservergit/cppserver-docs/assets/126841556/38ab6b83-db8c-4f50-831d-3c341278b669)
 
-[C++20 modules](https://en.cppreference.com/w/cpp/language/modules) are superior to the classic C-style .H/.CPP modules, but sadly in GCC-12.x the C++ 20 Modules implementation is not production-ready yet.
+
+[C++20 modules](https://en.cppreference.com/w/cpp/language/modules) are superior to the classic style .H/.CPP modules, but sadly in GCC-12.x the C++ 20 Modules implementation is not production-ready yet.
 
 This is the modular structure of CPPServer:
 
-![module-structure](https://github.com/cppservergit/cppserver-docs/assets/126841556/77b9e05a-0a3f-424e-8fc6-5debb1ceb9c6)
+![module-structure](https://github.com/cppservergit/cppserver-docs/assets/126841556/2ebd881d-d475-4db7-91e1-a490de705626)
 
 The client of a module only has access to the module's interface, implementation details can change and the client won't be affected, this is the case with the module sql.cpp, there is an implementation (default one) for PostgreSQL native API and another for ODBC, which is the native API for SQLServer. The client of this module (mse.cpp) does not get affected by the implementation sql.cpp, the code is clean, each module exposes its own namespace. Below is the implementation of a generic function that executes an SQL command that returns a resultset as a JSON array, whatever the implementation of sql:: is, this code remains the same.
 
