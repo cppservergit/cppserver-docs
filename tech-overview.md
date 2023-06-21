@@ -246,10 +246,62 @@ This will break the EPOLL loop, close server sockets and trigger the order for a
 
 ## Modular organization
 
-CPPServer uses a classic C++ module (.H/.CPP) organization for its translation units, every module declares its own namespace to enclose all elements (variables, functions, etc), a  header (.H) file to declare the public interface and a corresponding .CPP file containing the implementation of the interface, only the elements declared in the interface file will be available to the clients of that module, whatever is not declared in the interface, won't be visible from the implementation module. These translation units are compiled separately, and when using a Makefile, only what has been changed needs to be recompiled (and any targets that depend on it). No header-only libraries are used, except for the JSON parser, which is a 3rd party open-source component. This helps make the compilation process simple and fast, -O3 and link-time-optimization are used for all the targets.
+CPPServer uses a classic C++ module (.H/.CPP) organization for its translation units, every module declares its own namespace to enclose all elements (variables, functions, etc), a  header (.H) file to declare the public interface and a corresponding .CPP file containing the implementation of the interface, by default, only the elements declared in the interface file will be available to other units that include that module, whatever is not declared in the interface won't be visible from the implementation module, but if another unit declares the namespace with the non-visible elements (those not declared in the .H file) then those elements will be visible. An example of this case:
+
+### Case 1 - hello.cpp can't call test::not_visible_fn() because it was not declared in the test.h file, so far so good
+```
+test.h
+namespace test
+{
+        void visible_fn();
+}
+
+test.cpp
+#include "test.h"
+namespace test
+{
+        void not_visible_fn() { }
+        void visible_fn() { not_visible_fn(); }
+}
+
+hello.cpp
+#include "test.h"
+int main()
+{
+        test::visible_fn();
+        test::not_visible_fn(); //error, won't compile
+}
+```
+
+### Case 2 - hello.cpp has a declaration of the namespace with the "private" functions, those are not private anymore
+```
+hello.cpp
+#include "test.h"
+namespace test { void not_visible_fn(); } //sorry, private no more
+int main()
+{
+        test::visible_fn();
+        test::not_visible_fn(); //sadly, compiles
+}
+```
+
+To avoid the breach shown above in `Case 2` you can use an unnamed namespace in test.cpp, this way the function remains private, only visible to test.cpp, it can't be declared in hello.cpp, example:
+```
+test.cpp
+#include "test.h"
+namespace //only visible inside this unit
+{
+	void not_visible_fn() { }
+}
+namespace test
+{
+        void visible_fn() { not_visible_fn(); }
+}
+```
+
+These translation units are compiled separately, and when using a Makefile, only what has been changed needs to be recompiled (and any targets that depend on it). No header-only libraries are used, except for the JSON parser, which is a 3rd party open-source component. This helps make the compilation process simple and fast, -O3 and link-time-optimization are used for all the targets.
 
 ![module-interface](https://github.com/cppservergit/cppserver-docs/assets/126841556/38ab6b83-db8c-4f50-831d-3c341278b669)
-
 
 [C++20 modules](https://en.cppreference.com/w/cpp/language/modules) are superior to the classic style .H/.CPP modules, but sadly in GCC-12.x the C++ 20 Modules implementation is not production-ready yet.
 
