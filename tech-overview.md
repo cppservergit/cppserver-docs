@@ -246,7 +246,11 @@ This will break the EPOLL loop, close server sockets and trigger the order for a
 
 ## Modular organization
 
-CPPServer uses a classic C++ module (.H/.CPP) organization for its translation units, every module declares its own namespace to enclose all elements (variables, functions, etc), a  header (.H) file to declare the public interface and a corresponding .CPP file containing the implementation of the interface, by default, only the elements declared in the interface file will be available to other units that include that module, whatever is not declared in the interface won't be visible from the implementation module, but if another unit declares the namespace with the non-visible elements (those not declared in the .H file) then those elements will be visible. An example of this case:
+CPPServer uses a classic C++ module (.H/.CPP) organization for its translation units, every module declares its own namespace to enclose all elements (variables, functions, etc), a  header (.H) file to declare the public interface and a corresponding .CPP file containing the implementation of the interface, by default, only the elements declared in the interface file will be available to other units that include that module, whatever is not declared in the interface won't be visible from the implementation module. 
+
+![module-interface](https://github.com/cppservergit/cppserver-docs/assets/126841556/38ab6b83-db8c-4f50-831d-3c341278b669)
+
+The above statement (and diagram) is only partially correct. If another unit declares the namespace with the non-visible elements (those not declared in the .H file) then those elements will be visible. An example of this case:
 
 __Case 1 - hello.cpp can't call test::not_visible_fn() because it was not declared in the test.h file, so far so good__
 ```
@@ -302,8 +306,6 @@ namespace test
 Now there is nothing hello.cpp can do to access not_visible_fn(), it gets constrained to the public interface of test, at most to the named namespace test:: as shown in `case 2`.
 
 These translation units are compiled separately, and when using a Makefile, only what has been changed needs to be recompiled (and any targets that depend on it). No header-only libraries are used, except for the JSON parser, which is a 3rd party open-source component. This helps make the compilation process simple and fast, -O3 and link-time-optimization are used for all the targets.
-
-![module-interface](https://github.com/cppservergit/cppserver-docs/assets/126841556/38ab6b83-db8c-4f50-831d-3c341278b669)
 
 [C++20 modules](https://en.cppreference.com/w/cpp/language/modules) are superior to the classic style .H/.CPP modules, but sadly in GCC-12.x the C++ 20 Modules implementation is not production-ready yet.
 
