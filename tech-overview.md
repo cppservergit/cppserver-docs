@@ -305,13 +305,13 @@ namespace test
 ```
 Now there is nothing hello.cpp can do to access not_visible_fn(), it gets constrained to the public interface of test, at most to the named namespace test:: as shown in `case 2`.
 
-These translation units are compiled separately, and when using a Makefile, only what has been changed needs to be recompiled (and any targets that depend on it). No header-only libraries are used, except for the JSON parser, which is a 3rd party open-source component. This helps make the compilation process simple and fast, -O3 and link-time-optimization are used for all the targets.
+These translation units are compiled separately, and when using a Makefile, only what has been changed needs to be recompiled (and any targets that depend on it). No header-only libraries are used. This helps make the compilation process simple and fast, -O3 and link-time-optimization are used for all the targets.
 
 [C++20 modules](https://en.cppreference.com/w/cpp/language/modules) are superior to the classic style .H/.CPP modules, but sadly in GCC-12.x the C++ 20 Modules implementation is not production-ready yet.
 
 This is the modular structure of CPPServer:
 
-![module-structure](https://github.com/cppservergit/cppserver-docs/assets/126841556/2ebd881d-d475-4db7-91e1-a490de705626)
+![module-structure](https://github.com/cppservergit/cppserver-docs/assets/126841556/75e6f114-9dac-4c8d-8e82-7b1d562e0a38)
 
 The client of a module only has access to the module's interface, implementation details can change and the client won't be affected, this is the case with the module sql.cpp, there is an implementation (default one) for PostgreSQL native API and another for ODBC, which is the native API for SQLServer. The client of this module (mse.cpp) does not get affected by the implementation sql.cpp, the code is clean, each module exposes its own namespace. Below is the implementation of a generic function that executes an SQL command that returns a resultset as a JSON array, whatever the implementation of sql:: is, this code remains the same.
 
@@ -339,14 +339,14 @@ The client of a module only has access to the module's interface, implementation
 |audit|audit::|Saves audit record, default implementation uses logger module|
 |email|smtp::|A libcurl wrapper for secure SMTP|
 
-There is fair separation of concerns between these modules, which is good for design because it helps isolate changes when necessary, let's say there is a bug parsing HTTP request headers, the fix would be isolated to httputils.cpp module implementation, from the build system perspective (Makefile) only this module would require recompilation, and its dependant targets if any.
+There is a separation of concerns between these modules, which is good for design because it helps isolate changes when necessary, let's say there is a bug parsing HTTP request headers, the fix would be isolated to httputils.cpp module implementation, from the build system perspective (Makefile) only this module would require recompilation, and its dependant targets if any.
 
 ## Memory management
 
-Great care was put in CPPServer's memory handling, starting with the use of __Modern C++__ abstractions that provide automatic resource management thanks to RAII, by avoiding the use of C-style low code whenever possible and absolutely not using dynamic allocation of memory with low level C/C++ functions.
+Great care was put into CPPServer's memory handling, starting with the use of __Modern C++__ abstractions that provide automatic resource management thanks to RAII, by avoiding the use of C-style low code whenever possible and absolutely not using dynamic allocation of memory with low-level C/C++ functions.
 The present version has been verified free of memory leaks using tools like valgrind and GCC instrumentation, but it was also a design goal to avoid repeated allocation/destruction of objects, which in a server can occur at a high rate leading to memory fragmentation and also imposing lots of work on the C++ allocators, to achieve this we pass by reference when it is convenient to avoid a copy, but we also pre-allocate main objects once, like a thread_local string to store JSON responses, each worker thread has its own thread-safe, memory-safe buffer to store the current JSON response, no allocations will be made for each request, just one, for a server running 7x24 that means some huge savings in memory allocation tasks, the same happens with the request/response objects, the main thread maintains a map that associated a socket FD with the request/response object, this object gets passed by reference to the worker threads. The server can process millions of requests, but it won't be allocating the main buffers (json response, http request/response) millions of times, just once.
 
-Each worker thread manages a copy of the service map (std::unordered_map), which is a representation of the parsed config.json file, this map contains pointers the the microservice functions and validator functions associated with each URI (service API), as defined in config.json, and when a request gets dispatched to a worker thread, it will lookup on this service map using the path/uri of the service requested, if found, the pointers are retrieved, the security checks and inputs validated and if everything is OK the database I/O function will be executed.
+Each worker thread manages a copy of the service map (std::unordered_map), which is a representation of the parsed config.json file, this map contains pointers the microservice functions and validator functions associated with each URI (service API), as defined in config.json, and when a request gets dispatched to a worker thread, it will lookup on this service map using the path/uri of the service requested, if found, the pointers are retrieved, the security checks and inputs validated and if everything is OK the database I/O function will be executed.
 
 ![cppserver-configmap](https://github.com/cppservergit/cppserver-docs/assets/126841556/6ea35d75-3aea-419b-bda0-5813fe1a1314)
 
@@ -396,13 +396,13 @@ We use a thread_local variable in the microservice engine module (mse.cpp) to ma
 	thread_local service_engine t_service;
 ```
 
-The engine is thread_local, each worker thread has one, and the engine mantains its own string buffer for JSON responses, preallocated at 32K.
+The engine is thread_local, each worker thread has one, and the engine maintains its own string buffer for JSON responses, preallocated at 32K.
 
-With these design choices CPPServer has proven itself capable of processing successfully thousands (7000+) of real microservice requests per second on computers that fit on the palm of the hand, including the overhead of security and inputs checks, as well as database I/O, a balance between performance, code simplicity and stability was sought and to a certain extent it has been achieved in the current version. Please note that when running tests using "echo" services and utilities like Apache Utils (ab) the request-per-second rate is much higher, but the regular stress tests are run using a custom-made, configurable C++ HTTPS client that "impersonates" real users, creates thousands of real security sessions and this way the whole program is put under load, up to 20000 concurrent users have been used in these tests. Keep in mind that on a production environment there will always be an Ingress/Load Balancer in front of CPPServer.
+With these design choices, CPPServer has proven itself capable of processing successfully thousands (7000+) of real microservice requests per second on mini-computers that fit in the palm of the hand, including the overhead of security and inputs checks, as well as database I/O, a balance between performance, code simplicity and stability was sought and to a certain extent it has been achieved in the current version. Please note that when running tests using "echo" services and utilities like Apache Utils (ab) the request-per-second rate is much higher, but the regular stress tests are run using a custom-made, configurable C++ HTTPS client that "impersonates" real users, creates thousands of real security sessions and this way the whole program is put under load, up to 20000 concurrent users have been used in these tests. Keep in mind that in a production environment, there will always be an Ingress/Load Balancer in front of CPPServer.
 
 ## Database I/O
 
-The generic functions that can be used for a JSON API reside in mse.cpp, these can be services or validators, all of them have the same interface and rely on the sql:: module to perform its work. These functions are invoked by the service_engine::run() function shown above in the previous section. 
+The generic functions that can be used for a JSON API reside in mse.cpp, these can be services or validators, all of them have the same interface and rely on the sql:: module to perform their work. These functions are invoked by the service_engine::run() function shown above in the previous section. 
 Here is an example of some of the most basic functions:
 ```
 	//returns a single resultset
@@ -429,7 +429,7 @@ Here is an example of some of the most basic functions:
 	}
 ```
 
-They receive the worker thread's JSON buffer to store the response, and a variable representing the microservice in question, this is a struct with several fields and functions that automate generating properly formatted SQL without risks of SQL injection attacks, the sql:: module takes care of the hard work, and will trigger an exception in there is a fatal error, that exception will be trapped by the function that wraps/coordinates all the tasks inside the mse:: module, microservice(), and in that case a JSON with the proper ERROR status will be returned, and detailed logs will be printed on the server using the logger:: module, which will use STDERR and/or LOKI (a very popular logs aggregator)
+They receive the worker thread's JSON buffer to store the response, and a variable representing the microservice in question, this is a struct with several fields and functions that automate generating properly formatted SQL without risks of SQL injection attacks, the sql:: module takes care of the hard work and will trigger an exception in there is a fatal error, that exception will be trapped by the function that wraps/coordinates all the tasks inside the mse:: module, microservice(), and in that case, a JSON with the proper ERROR status will be returned, and detailed logs will be printed on the server using the logger:: module, which will use STDERR and/or LOKI (a very popular logs aggregator)
 
 The microservice data structure is central to this mechanism, when config.json is parsed, each entry (if valid) will be converted into a variable of this type:
 
@@ -465,7 +465,7 @@ The microservice data structure is central to this mechanism, when config.json i
 	};
 ```
 
-A database I/O service will only be invoked if the security checks passed and the inputs checks also passed, otherwise there is no way the code engine will invoke them, that's the contract. The inputs check includes invoking a validator function if any was defined for the service in config.json, validator functions are very similar to service functions, except that these will add a JSON with INVALID status if the validation fails, these are the generic validation functions in the current version:
+A database I/O service will only be invoked if the security checks passed and the inputs checks also passed, otherwise, there is no way the code engine will invoke them, that's the contract. The inputs check includes invoking a validator function if any was defined for the service in config.json, validator functions are very similar to service functions, except that these will add a JSON with INVALID status if the validation fails, these are the generic validation functions in the current version:
 
 ```
 	//if the resultset is not empty then fail (jsonResp will contain something)
@@ -507,7 +507,7 @@ A database I/O service will only be invoked if the security checks passed and th
 
 ### JSON declarations and its relation with C++ code
 
-As an API builder using CPPServer, you don't have to write C++, it's already written as shown above, you just have to declare your API in config.json, example:
+As an API builder using CPPServer, you don't have to write C++, it's already written as shown above, you just have to declare your API in config.json, for example:
 ```
 		{
 			"db": "db1",
@@ -527,11 +527,11 @@ As an API builder using CPPServer, you don't have to write C++, it's already wri
 
 Relevant aspects of this JSON record:
 
-* The `db` attribute references an environment variable `CPP_DB1` that contains the connection string, it's an index to lookup an already established database connection using that connection string, you can target several databases from the same config.json.
+* The `db` attribute references an environment variable `CPP_DB1` that contains the connection string, it's an index to look up an already established database connection using that connection string, you can target several databases from the same config.json.
 * The `sql` attribute is the SQL command to be executed, it may contain placeholders to replace pre-validated input values, the mechanism that performs that task already takes care of SQL injection and proper formatting.
 * The `function` attribute, that's the key part, it must match one of the service API functions contained in the module mse.cpp, using that string a pointer to the function will be retrieved.
 
-When the program starts, config.json gets parsed and every record is converted into a variable of type config::microservice (shown above in previous section) and stored in an unordered map, indexed by the path (uri) of the service.
+When the program starts, config.json gets parsed and every record is converted into a variable of type config::microservice (shown above in the previous section) and stored in an unordered map, indexed by the path (URI) of the service.
 This map of microservice objects is the link between the request URI and the function that gets executed in mse.cpp. The are more aspects to highlight about config.json, but it has its own document for that purpose, what is relevant for this overview is to show the relation between the configuration and the execution of the code that does the database I/O. CPPServer uses std::function to invoke the service API function.
 
 ### Inventory of service API functions
@@ -542,8 +542,9 @@ These are the utility functions that cover a wide variety of business cases, ass
 |--------|-----------|
 |dbget|Retrieves a single resultset as JSON|
 |dbgetm|Retrieves multiple resultsets as JSON|
-|dbexec|Executes a data modification query, returns JSON with status OK, don't expects a resultset|
-|login|Executes the cpp_dblogin SQL function, if resultset is not empty assumes successful login and creates a security session, uses login:: and session:: modules|
+|dbexec|Executes a data modification query, returns JSON with status OK, doesn't expect a resultset|
+|dbget_json|For PostgreSQL only, retrieves a single record with a single column containing a JSON resultset, PgSQL can export JSON from a function|
+|login|Executes the cpp_dblogin SQL function, if the resultset is not empty assumes successful login and creates a security session, uses login:: and session:: modules|
 |logout|Executes the cpp_session_delete SQL procedure, always returns JSON with status OK, uses session:: module|
 |downloadFile|retrieves a BLOB given its ID from /var/blobs and stores it in the response buffer, for this service the response is not JSON but a file attachment for the browser|
 |deleteFile|deletes a BLOB from /var/blobs given its ID and also the corresponding record in the database, returns JSON with status OK|
@@ -557,22 +558,22 @@ __Validation functions__
 
 |Function|Description|
 |--------|-----------|
-|db_match|Fails if the resultset is empty, if data is not found for the given SQL then validation fails|
-|db_nomatch|Fails if the resultset is not empty, if data is found for the given SQL then validation fails|
+|db_match|Fails if the resultset is empty, if data is not found for the given SQL then the validation fails|
+|db_nomatch|Fails if the resultset is not empty, if data is found for the given SQL then the validation fails|
 
 ## Basic request workflow
 
-CPPServer accepts GET/POST HTTP requests only, basically when a request arrives it will be checked for security, if the request is not secure (ie. /ms/login) this is skipped, otherwise the security validations are applied, and proper authentication and authorization will be verified, if security OK then inputs will be validated, are they required or optional? are they of the correct data type according to config.json rules? is there an additional validator defined for this service and it tested OK? if inputs validation OK then CPPServer will execute the microservice.
+CPPServer accepts GET/POST HTTP requests only, basically, when a request arrives it will be checked for security, if the request is not secure (ie. /ms/login) this is skipped, otherwise the security validations are applied, and proper authentication and authorization will be verified, if security OK then inputs will be validated, are they required or optional? are they of the correct data type according to config.json rules? is there an additional validator defined for this service and it was tested OK? if inputs validation is OK then CPPServer will execute the microservice.
 
 ![request-workflow](https://github.com/cppservergit/cppserver-docs/assets/126841556/22cfc9cc-f979-4b86-8bb7-1e0bfd4a89e8)
 
 ## Send email in the background
 
-CPPServer relies on the battle-proven libcurl library to send secure email (SMTP over TLS) with optional attachments, a [flexible mechanism](https://github.com/cppservergit/cppserver-docs/blob/main/json-api-config.md#sending-email-after-execution-of-service) was designed so that email dispatching can be configured in config.json as part of the microservice definition. A module email.h encapsulates the low-level API of libcurl and makes it very easy to implement SMTP in CPPServer using Modern C++.
+CPPServer relies on the battle-proven libcurl library to send a secure email (SMTP over TLS) with optional attachments, a [flexible mechanism](https://github.com/cppservergit/cppserver-docs/blob/main/json-api-config.md#sending-email-after-execution-of-service) was designed so that email dispatching can be configured in config.json as part of the microservice definition. A module email.h encapsulates the low-level API of libcurl and makes it very easy to implement SMTP in CPPServer using Modern C++.
 
 ![email-config](https://github.com/cppservergit/cppserver-docs/assets/126841556/fdc93c36-69e0-4dbc-bd8a-8ba82eecfe7c)
 
-Sending an email can take a long time (several seconds), depending if big attachments are being used and also if the connection to the SMTP server is not that fast, regardless of the time it takes, this task won't affect the performance of CPPServer, because the code for sending email runs in a dettached thread, meaning it is started by the microservice's thread, the function that started it returns immediately and the thread continues to run in background without blocking the capacity of the main thread to receive and dispatch requests. The mail task (if configured) will only be triggered if the microservice executed without triggering an exception. 
+Sending an email can take a long time (several seconds), depending if big attachments are being used and also if the connection to the SMTP server is not that fast, regardless of the time it takes, this task won't affect the performance of CPPServer, because the code for sending email runs in a detached thread, meaning it is started by the microservice's thread, the function that started it returns immediately and the thread continues to run in the background without blocking the capacity of the main thread to receive and dispatch requests. The mail task (if configured) will only be triggered if the microservice is executed without triggering an exception. 
 
 Using a lambda, a new thread is created, and then the `detach()` method is called to allow the new thread to continue running despite that the function that spawns the thread reaches its end, the jthread destructor won't be invoked, not until the jthread function finishes after `m.send()`, then all the resources allocated by this jthread will be released. The lambda receives copies of all the data it requires to avoid problems when the invoker function terminates.
 
