@@ -41,10 +41,7 @@ void start_server() noexcept
 	//shutdown workers
 	for (auto s: stops) {
 		s.request_stop();
-		{
-			std::scoped_lock lock {m_mutex};
-			m_cond.notify_all();
-		}
+		m_cond.notify_all();
 	}
 }
 
@@ -75,8 +72,8 @@ So, controversial as it may be the use of this Map (std::map) and the passing of
 Only the main thread, the one that controls the EPOLL event loop, will accept connections and perform read/write operations on sockets, the worker threads only use the assembled request to execute the service using the inputs and produce a JSON output, when the output is ready, the main thread will be notified by EPOLL to write to the socket, all socket operations are non-blocking. The code follow Linux API guidance in order to minimize system calls, for instance, when accepting new connections, a single call `accept4()` accepts and sets the new socket in non-blocking mode:
 
 ```
- 		  else if (listen_fd == events[i].data.fd) // new connection.
-		  {
+			else if (listen_fd == events[i].data.fd) // new connection.
+			{
 				struct sockaddr addr;
 				socklen_t len;
 				len = sizeof addr;
@@ -85,24 +82,11 @@ Only the main thread, the one that controls the EPOLL event loop, will accept co
 					logger::log("epoll", "error", "connection accept FAILED for epoll FD: " + std::to_string(epoll_fd) + " " + std::string(strerror(errno)));
 					continue;
 				}
-
-				int rcvbuf {131072}, sndbuf {262144};
-				setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof rcvbuf);
-				setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof sndbuf);
-				
-				if (!buffers.contains(fd))
-					 buffers.insert({fd, http::request()});
-				else {
-					 http::request& req = buffers[fd];
-					 if (!req.is_clear) {
-						logger::log("epoll", "warn", "invoking request.clear() on FD: " + std::to_string(fd) + " path: " + req.path);
-						req.clear();
-					 }
-				}
-								
 				mse::update_connections(1);
+				const char* remote_ip = inet_ntoa(((struct sockaddr_in*)&addr)->sin_addr);
+				auto& pair = *buffers.insert_or_assign(fd, http::request(fd, remote_ip)).first; //add or replace
 				epoll_event event;
-				event.data.fd = fd;
+				event.data.ptr = &pair.second; //store pointer to request object
 				event.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
 				epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &event);
 			}
@@ -113,24 +97,32 @@ Only the main thread, the one that controls the EPOLL event loop, will accept co
 When a "read" event arrives, the main thread reads data from the socket while available, assembling the request in parts (fields, headers, etc), when the request is complete the task is dispatched to any of the worker threads, using a queue to store it, the task contains the epoll_fd, the socket FD, and a reference to the specific request object associated with this socket's FD, this is the async part, the control returns inmediately to the main thread while some worker thread is processing in the background the service using the microservice engine module msp.cpp (security checks, database I/O, response JSON assembly, error handling, etc). The "task producer" is shown at the end of the code below:
 
 ```
-				int fd {events[i].data.fd};
-				http::request& req = buffers[fd];
+			else // read/write
+			{
+				if (events[i].data.ptr == NULL) {
+					logger::log("epoll", "error", "epoll data ptr is null - unable to retrieve request object");
+					continue;
+				}
+				http::request& req = *static_cast<http::request*>(events[i].data.ptr);
+				int fd {req.fd};
+				
 				if (events[i].events & EPOLLIN) {
 					bool run_task {false};
-					int count {0};
-					while ((count = read(fd, data, sizeof(data)))) {
-						if (count == -1 && errno == EAGAIN) {
+					while (true) 
+					{
+						int count = read(fd, data.data(), data.size());
+						if (count == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
 							break;
 						}
 						if (count > 0) {
-							if (read_request(fd, req, data, count)) {
+							if (read_request(req, data.data(), count)) {
 								run_task = true;
 								break;
 							}
 						}
 						else {
 							logger::log("epoll", "error", "read error FD: " + std::to_string(fd) + " " + std::string(strerror(errno)));
-							buffers[fd].clear();
+							req.clear();
 							break;
 						}
 					}
@@ -140,9 +132,20 @@ When a "read" event arrives, the main thread reads data from the socket while av
 						{
 							std::scoped_lock lock {m_mutex};
 							m_queue.push(wp);
-							m_cond.notify_all();
 						}
+						m_cond.notify_all();
 					}
+				} else if (events[i].events & EPOLLOUT) {
+					//send response
+					if (req.response.write(fd)) {
+						req.clear();
+						epoll_event event;
+						event.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
+						event.data.ptr = &req;
+						epoll_ctl(epoll_fd, EPOLL_CTL_MOD, fd, &event);
+					}
+				}
+			}
 ```
 
 We avoid by all means calling `read()` or `write()` if there is no data available/socket ready, it's one fundamental technique when using non-blocking sockets with epoll, wait for the proper events and signals, don't call the system if it's not 100% necessary.
@@ -181,12 +184,12 @@ void consumer(std::stop_token tok) noexcept
 		
 		//request ready, set epoll fd for output
 		epoll_event event;
-		event.data.fd = params.fd;
 		event.events = EPOLLOUT | EPOLLET | EPOLLRDHUP;
+		event.data.ptr = &params.req;
 		epoll_ctl(params.epoll_fd, EPOLL_CTL_MOD, params.fd, &event);
 	}
 	
-	//ending task - free resources if necessary
+	//ending task - free resources
 	logger::log("pool", "info", "stopping worker thread", true);
 }
 ```
@@ -232,15 +235,12 @@ Handling the STOP signal with EPOLL:
 			}
 ```
 
-This will break the EPOLL loop, close server sockets and trigger the order for all threads to stop and release their resources, with some very _Modern C++_ code.
+This will break the EPOLL loop, close server sockets and notify all threads to stop and release their resources, with some very _Modern C++_ code.
 ```
 	//shutdown workers
 	for (auto s: stops) {
 		s.request_stop();
-		{
-			std::scoped_lock lock {m_mutex};
-			m_cond.notify_all();
-		}
+		m_cond.notify_all();
 	}
 ```
 
@@ -398,13 +398,19 @@ We use a thread_local variable in the microservice engine module (mse.cpp) to ma
 
 The engine is thread_local, each worker thread has one, and the engine maintains its own string buffer for JSON responses, preallocated at 32K.
 
-With these design choices, CPPServer has proven itself capable of processing successfully thousands (7000+) of real microservice requests per second on mini-computers that fit in the palm of the hand, including the overhead of security and inputs checks, as well as database I/O, a balance between performance, code simplicity and stability was sought and to a certain extent it has been achieved in the current version. Please note that when running tests using "echo" services and utilities like Apache Utils (ab) the request-per-second rate is much higher, but the regular stress tests are run using a custom-made, configurable C++ HTTPS client that "impersonates" real users, creates thousands of real security sessions and this way the whole program is put under load, up to 20000 concurrent users have been used in these tests. Keep in mind that in a production environment, there will always be an Ingress/Load Balancer in front of CPPServer.
+With these design choices, CPPServer has proven itself capable of processing successfully thousands (7000+) of real microservice requests per second on mini-computers that fit in the palm of the hand, including the overhead of security and input checks, as well as database I/O, a balance between performance, code simplicity and stability was sought and to a certain extent it has been achieved in the current version. Please note that when running tests using "echo" services and utilities like Apache Utils (ab) the request-per-second rate is much higher, but the regular stress tests are run using a custom-made, configurable C++ HTTPS client that "impersonates" real users, creates thousands of real security sessions and this way the whole program is put under load, up to 20000 concurrent users have been used in these tests. Keep in mind that in a production environment, there will always be an Ingress/Load Balancer in front of the CPPServer process.
 
 ## Database I/O
 
 The generic functions that can be used for a JSON API reside in mse.cpp, these can be services or validators, all of them have the same interface and rely on the sql:: module to perform their work. These functions are invoked by the service_engine::run() function shown above in the previous section. 
 Here is an example of some of the most basic functions:
 ```
+	//returns json straight from the database
+	void dbget_json(std::string& jsonBuffer, config::microService& ms) 
+	{
+		sql::get_json_record(ms.db, jsonBuffer, ms.reqParams.sql(ms.sql, t_user_info.userLogin));
+	}
+
 	//returns a single resultset
 	void dbget(std::string& jsonBuffer, config::microService& ms) 
 	{
